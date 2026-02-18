@@ -23,6 +23,19 @@ This repository is focused on the Cloudflare-native architecture:
 This project builds directly on prior open-source work from the ChatJS codebase.
 The point of this repo is the replatform and continued development, not pretending the foundation came from nowhere.
 
+## Upstream Reference And Parity
+
+- Upstream ChatJS repository: [franciscomoretti/chatjs](https://github.com/franciscomoretti/chatjs)
+- Historical upstream lineage: [vercel/ai-chatbot](https://github.com/vercel/ai-chatbot)
+
+`redChatHeavy` is intended to maintain practical parity with the upstream ChatJS core feature set while changing runtime/platform:
+
+- multi-model chat and streaming
+- auth and session flows
+- attachments and file serving
+- chat/project/share/settings UX
+- MCP/tooling integrations
+
 ## Authorship Transparency
 
 The replatform work in `redChatHeavy` was completed primarily by `gpt-5.3-codex` with minimal manual coding.
@@ -32,6 +45,10 @@ The replatform work in `redChatHeavy` was completed primarily by `gpt-5.3-codex`
 - Human contribution in this phase was mainly direction, review, and decisions.
 
 For more detail, see `AUTHORSHIP.md`.
+
+## Why This Exists
+
+This fork was also an explicit experiment to evaluate whether `gpt-5.3-codex` could execute a real framework/runtime migration end-to-end with near-zero manual coding intervention.
 
 ## Current Runtime Snapshot
 
