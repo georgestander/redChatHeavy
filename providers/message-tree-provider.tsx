@@ -32,15 +32,35 @@ type SerializedChatMessage = Omit<ChatMessage, "metadata"> & {
   };
 };
 
-function hydrateMessageDates(message: SerializedChatMessage): ChatMessage {
+function hydrateMessageDates(
+  message: SerializedChatMessage | null | undefined
+): ChatMessage | null {
+  if (!message) {
+    return null;
+  }
+
+  const createdAtRaw = message.metadata?.createdAt;
+  const createdAt =
+    createdAtRaw instanceof Date
+      ? createdAtRaw
+      : createdAtRaw
+        ? new Date(createdAtRaw)
+        : new Date();
+  const safeCreatedAt = Number.isNaN(createdAt.getTime())
+    ? new Date()
+    : createdAt;
+
   return {
     ...message,
     metadata: {
-      ...message.metadata,
-      createdAt:
-        message.metadata.createdAt instanceof Date
-          ? message.metadata.createdAt
-          : new Date(message.metadata.createdAt),
+      createdAt: safeCreatedAt,
+      activeStreamId: message.metadata?.activeStreamId ?? null,
+      parentMessageId: message.metadata?.parentMessageId ?? null,
+      selectedModel:
+        message.metadata?.selectedModel ??
+        ("" as ChatMessage["metadata"]["selectedModel"]),
+      selectedTool: message.metadata?.selectedTool,
+      usage: message.metadata?.usage,
     },
   };
 }
@@ -87,9 +107,9 @@ export function MessageTreeProvider({ children }: MessageTreeProviderProps) {
     enabled: !!id && isPersisted && pathname !== "/",
   });
 
-  const allMessages = (messagesQuery.data ?? []).map((message) =>
-    hydrateMessageDates(message as SerializedChatMessage)
-  );
+  const allMessages = (messagesQuery.data ?? [])
+    .map((message) => hydrateMessageDates(message as SerializedChatMessage))
+    .filter((message): message is ChatMessage => Boolean(message));
 
   useEffect(() => {
     if (!isPersisted && pathname === "/") {
