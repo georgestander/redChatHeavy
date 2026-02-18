@@ -3,7 +3,7 @@
 
 # redChatHeavy
 
-ChatJS replatformed to RedwoodSDK + Cloudflare Workers.
+Powered by RedwoodSDK + Cloudflare Workers.
 </div>
 
 ## What This Repo Is

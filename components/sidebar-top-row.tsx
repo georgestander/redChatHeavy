@@ -27,7 +27,7 @@ export function SidebarTopRow() {
             refreshChatID();
           }}
         >
-          <span className="flex cursor-pointer items-center gap-2 rounded-md p-1 font-semibold text-lg hover:bg-muted">
+          <span className="flex cursor-pointer items-center gap-2 rounded-md p-1 hover:bg-muted">
             <Image
               alt={config.appName}
               className="h-6 w-6"
@@ -35,7 +35,12 @@ export function SidebarTopRow() {
               src="/icon.svg"
               width={24}
             />
-            {config.appName}
+            <span className="flex flex-col leading-tight">
+              <span className="font-semibold text-lg">{config.appName}</span>
+              <span className="text-[10px] text-muted-foreground">
+                Powered by RedwoodSDK + Cloudflare
+              </span>
+            </span>
           </span>
         </Link>
       ) : null}

@@ -19,7 +19,12 @@ export function SignupForm({
       <Card {...props}>
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Create an account</CardTitle>
-          <CardDescription>Continue with a social provider</CardDescription>
+          <CardDescription className="space-y-1">
+            <span className="block">Continue with a social provider</span>
+            <span className="block text-[11px] text-muted-foreground">
+              Powered by RedwoodSDK + Cloudflare
+            </span>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-6">
