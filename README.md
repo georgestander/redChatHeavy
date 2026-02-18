@@ -23,6 +23,16 @@ This repository is focused on the Cloudflare-native architecture:
 This project builds directly on prior open-source work from the ChatJS codebase.
 The point of this repo is the replatform and continued development, not pretending the foundation came from nowhere.
 
+## Authorship Transparency
+
+The replatform work in `redChatHeavy` was completed primarily by `gpt-5.3-codex` with minimal manual coding.
+
+- Migration implementation was executed through Codex-driven edits and verification.
+- Migration docs and README updates in this fork were written by Codex.
+- Human contribution in this phase was mainly direction, review, and decisions.
+
+For more detail, see `AUTHORSHIP.md`.
+
 ## Current Runtime Snapshot
 
 - Deploy target: Cloudflare Workers
