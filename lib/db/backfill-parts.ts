@@ -1,9 +1,9 @@
-import { neon } from "@neondatabase/serverless";
 import { config } from "dotenv";
 import { inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import type { ChatMessage } from "@/lib/ai/types";
 import { mapUIMessagePartsToDBParts } from "@/lib/utils/message-mapping";
+import { createNeonHttpCompatClient } from "./neon-compat";
 import { message, part } from "./schema";
 
 config({
@@ -83,7 +83,7 @@ const runBackfill = async () => {
     throw new Error("DATABASE_URL is not defined");
   }
 
-  const sql = neon(process.env.DATABASE_URL);
+  const sql = createNeonHttpCompatClient(process.env.DATABASE_URL);
   const db = drizzle(sql);
 
   console.log("⏳ Starting parts backfill...");
