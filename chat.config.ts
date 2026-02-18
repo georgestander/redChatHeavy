@@ -119,7 +119,15 @@ const config: ConfigInput = {
   },
   anonymous: {
     credits: isProd ? 10 : 1000,
-    availableTools: [],
+    // Allow local/dev testing of tools without sign-in.
+    availableTools: isProd
+      ? []
+      : [
+          "createTextDocument",
+          "webSearch",
+          "deepResearch",
+          "generateImage",
+        ],
     rateLimit: {
       requestsPerMinute: isProd ? 5 : 60,
       requestsPerMonth: isProd ? 10 : 1000,

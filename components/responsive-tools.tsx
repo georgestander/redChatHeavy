@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import type { UiToolName } from "@/lib/ai/types";
+import { config } from "@/lib/config";
 import { useChatModels } from "@/providers/chat-models-provider";
 import { useSession } from "@/providers/session-provider";
 import { enabledTools, toolDefinitions } from "./chat-features-definitions";
@@ -33,6 +34,15 @@ export function ResponsiveTools({
   const { data: session } = useSession();
   const isAnonymous = !session?.user;
   const [showLoginPopover, setShowLoginPopover] = useState(false);
+  const anonymousAllowedToolSet = new Set<UiToolName>(
+    config.anonymous.availableTools.filter((tool): tool is UiToolName =>
+      Object.hasOwn(toolDefinitions, tool)
+    )
+  );
+  const visibleTools = isAnonymous
+    ? enabledTools.filter((tool) => anonymousAllowedToolSet.has(tool))
+    : enabledTools;
+  const canAnonymousUseTools = visibleTools.length > 0;
 
   const { getModelById } = useChatModels();
   const modelDef = getModelById(selectedModelId);
@@ -45,7 +55,11 @@ export function ResponsiveTools({
       return;
     }
 
-    if (isAnonymous && tool !== null) {
+    if (
+      isAnonymous &&
+      tool !== null &&
+      !anonymousAllowedToolSet.has(tool)
+    ) {
       setShowLoginPopover(true);
       return;
     }
@@ -55,7 +69,7 @@ export function ResponsiveTools({
 
   return (
     <div className="flex items-center @[500px]:gap-2 gap-1">
-      {isAnonymous ? (
+      {isAnonymous && !canAnonymousUseTools ? (
         <Popover onOpenChange={setShowLoginPopover} open={showLoginPopover}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -101,7 +115,7 @@ export function ResponsiveTools({
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {enabledTools.map((key) => {
+            {visibleTools.map((key) => {
               const tool = toolDefinitions[key];
               const Icon = tool.icon;
               return (
