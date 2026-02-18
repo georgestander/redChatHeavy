@@ -9,7 +9,7 @@ const isProd = process.env.NODE_ENV === "production";
  * @see https://chatjs.dev/docs/reference/config
  */
 const config: ConfigInput = {
-  githubUrl: "https://github.com/franciscomoretti/chatjs",
+  githubUrl: "https://github.com/georgestander/redChatHeavy",
   appPrefix: "chatjs",
   appName: "ChatJS",
   appTitle: "ChatJS - The prod ready AI chat template",
