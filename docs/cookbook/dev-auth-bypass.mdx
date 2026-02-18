@@ -1,0 +1,109 @@
+---
+title: Dev Auth Bypass
+description: Auto-authenticate AI agents for browser testing
+---
+
+## Overview
+
+The `/api/dev-login` route allows AI agents to authenticate automatically during development. This enables automated browser testing without manual login flows.
+
+<Warning>Only works when `NODE_ENV=development`. Returns 404 in production.</Warning>
+
+## Usage
+
+Have your agent navigate to:
+
+```
+http://localhost:3000/api/dev-login
+```
+
+This creates a dev user session and redirects to `/` with valid auth cookies.
+
+## Agent Setup
+
+<Tabs>
+  <Tab title="Cursor">
+    Works out of the box with Cursor's built-in browser integration. Just instruct the agent to visit `/api/dev-login` before testing authenticated features.
+  </Tab>
+  <Tab title="Claude Code / Other Agents">
+    Install the [Playwright MCP](https://github.com/microsoft/playwright-mcp) server:
+
+    ```bash
+    npx @anthropic-ai/claude-code mcp add playwright -- npx @anthropic-ai/mcp-server-playwright
+    ```
+
+    Then instruct the agent to navigate to `/api/dev-login` before running tests.
+  </Tab>
+</Tabs>
+
+## How It Works
+
+1. Creates a `dev@localhost` user if it doesn't exist
+2. Generates a new session with 30-day expiry
+3. Sets a signed `better-auth.session_token` cookie
+4. Redirects to home page
+
+## Code
+
+```ts title="app/api/dev-login/route.ts"
+import { serializeSignedCookie } from "better-call";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { session, user } from "@/lib/db/schema";
+import { env } from "@/lib/env";
+
+export async function GET() {
+  if (process.env.NODE_ENV !== "development") {
+    return new Response("Not found", { status: 404 });
+  }
+
+  const devEmail = "dev@localhost";
+  let [devUser] = await db.select().from(user).where(eq(user.email, devEmail));
+
+  if (!devUser) {
+    const id = crypto.randomUUID();
+    [devUser] = await db
+      .insert(user)
+      .values({
+        id,
+        email: devEmail,
+        name: "Dev User",
+        emailVerified: true,
+      })
+      .returning();
+  }
+
+  const token = crypto.randomUUID();
+  const now = new Date();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  await db.insert(session).values({
+    id: crypto.randomUUID(),
+    userId: devUser.id,
+    token,
+    expiresAt,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const signedSessionCookie = await serializeSignedCookie(
+    "better-auth.session_token",
+    token,
+    env.AUTH_SECRET,
+    {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      expires: expiresAt,
+    }
+  );
+
+  const headers = new Headers({ Location: "/" });
+  headers.append("Set-Cookie", signedSessionCookie);
+
+  return new Response(null, {
+    status: 302,
+    headers,
+  });
+}
+```

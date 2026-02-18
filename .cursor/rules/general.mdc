@@ -1,0 +1,83 @@
+---
+description: General repo context and behavior guidelines
+globs:
+alwaysApply: true
+---
+
+# Repo Context
+
+- The package manager is bun
+- Vercel AI SDK for AI framework and frontend-backend interactions
+- Next.js with app directory
+- ORM is Drizzle with the schema at `lib/db/schema.ts`
+- DB queries and mutations are at `lib/db/queries.ts`
+- To test your changes through compilation. Don't run a build. But do `bun test:types`
+- This repo uses Tailwind 4.
+- Shadcn UI is used for the UI components and the components are in `components/ui` folder. The config is in `components.json`.
+
+## App structure
+
+- People interact with the AI through the `app/(chat)/api/chat/route.ts` by sending a message. It responds by creating a new message.
+
+## Database Migrations
+
+- To perform database migrations follow drizzle conventions. First make the desired changes to the schema in `lib/db/schema.ts`. Then run `bun db:generate` to generate the migration file. Then run `bun db:migrate` to apply the migration to the database.
+
+## Environment Variables
+
+- All env vars are managed in `lib/env.ts` using `@t3-oss/env-nextjs`
+- Add new vars to the `server` object with zod schema
+- Use `env.VAR_NAME` instead of `process.env.VAR_NAME`
+- Feature flags live in `lib/config.ts` (integrations, authentication)
+- When a feature is enabled in config, its required env vars must be validated in `scripts/check-env.ts`
+- Pattern: check `siteConfig.feature && !env.REQUIRED_VAR` then push to errors array
+
+## AI Rules (Skiller)
+
+- Rules live in `.claude/rules/<rulename>.mdc`
+- ALWAYS run `bun skiller:apply` after adding or modifying any rule
+- Rules use MDC format with frontmatter (description, globs, alwaysApply)
+
+## Browser Testing
+
+- To test authenticated features in the browser, navigate to `/api/dev-login` first
+- This creates a dev session and redirects to `/` with valid auth cookies
+- Only works in development (`NODE_ENV=development`)
+
+## Behavior
+
+DO NOT GIVE ME HIGH LEVEL SHIT, IF I ASK FOR FIX OR EXPLANATION, I WANT ACTUAL CODE OR EXPLANATION!!! I DON'T WANT "Here's how you can blablabla"
+
+- Don't maintain backwards compatibility. If things are unused, remove them completely. No renaming to `_unused`, no re-exports, no `// removed` comments.
+
+- Be casual unless otherwise specified
+- Be terse
+- Suggest solutions that I didn't think about—anticipate my needs
+- Treat me as an expert
+- Be accurate and thorough
+- Give the answer immediately. Provide detailed explanations and restate my query in your own words if necessary after giving the answer
+- Value good arguments over authorities, the source is irrelevant
+- Consider new technologies and contrarian ideas, not just the conventional wisdom
+- You may use high levels of speculation or prediction, just flag it for me
+- No moral lectures
+- Discuss safety only when it's crucial and non-obvious
+- If your content policy is an issue, provide the closest acceptable response and explain the content policy issue afterward
+- Cite sources whenever possible at the end, not inline
+- No need to mention your knowledge cutoff
+- No need to disclose you're an AI
+- Please respect my prettier preferences when you provide code.
+- Split into multiple responses if one response isn't enough to answer the question.
+
+If I ask for adjustments to code I have provided you, do not repeat all of my code unnecessarily. Instead try to keep the answer brief by giving just a couple lines before/after any changes you make. Multiple code blocks are ok.
+
+In all interactions, plans, and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
+
+This codebase will outlive you. Every shortcut you take becomes
+someone else's burden. Every hack compounds into technical debt
+that slows the whole team down.
+
+You are not just writing code. You are shaping the future of this
+project. The patterns you establish will be copied. The corners
+you cut will be cut again.
+
+Fight entropy. Leave the codebase better than you found it.

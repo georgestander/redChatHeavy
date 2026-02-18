@@ -1,0 +1,2 @@
+import{r as n,j as c}from"./client-BXVv_YeC.js";import{a}from"./auth-client-NCEzhzlD.js";const r=n.createContext(void 0);function v({initialSession:e,children:i}){const{data:s,isPending:t}=a.useSession(),o=e??null,u=n.useMemo(()=>({data:t?o??s:s??o,isPending:t}),[s,o,t]);return c.jsx(r.Provider,{value:u,children:i})}function S(){const e=n.useContext(r);if(!e)throw new Error("useSession must be used within a SessionProvider");return e}export{v as SessionProvider,S as useSession};
+//# sourceMappingURL=session-provider-DBOweKPF.js.map

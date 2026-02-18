@@ -1,0 +1,147 @@
+---
+title: Models
+description: Add, remove, or configure AI models
+---
+
+## Overview
+
+Configure which AI models are available in your app and how they behave. All model configuration lives in `chat.config.ts` under `config.models`.
+
+## Configuration Options
+
+```ts
+models: {
+  providerOrder: string[];        // Provider sort order in model selector
+  disabledModels: AppModelId[];   // Models hidden from all users
+  curatedDefaults: AppModelId[];  // Default models enabled for new users
+  anonymousModels: AppModelId[];  // Models available to anonymous users
+  defaults: {                     // Default model for each task type
+    chat: AppModelId;
+    title: AppModelId;
+    pdf: AppModelId;
+    artifact: AppModelId;
+    artifactSuggestion: AppModelId;
+    followupSuggestions: AppModelId;
+    suggestions: AppModelId;
+    polishText: AppModelId;
+    formatSheet: AppModelId;
+    analyzeSheet: AppModelId;
+    codeEdits: AppModelId;
+    chatImageCompatible: AppModelId;
+    image: ImageModelId;
+  };
+}
+```
+
+## Provider Order
+
+Control the display order of providers in the model selector:
+
+```ts
+providerOrder: ["openai", "google", "anthropic", "xai"],
+```
+
+Providers not in this list appear after those listed.
+
+## Disabling Models
+
+Hide specific models from all users:
+
+```ts
+disabledModels: ["morph/morph-v3-large", "morph/morph-v3-fast"],
+```
+
+## Curated Defaults
+
+Models enabled by default for new users. Users can enable additional models in settings.
+
+```ts
+curatedDefaults: [
+  "openai/gpt-5-nano",
+  "openai/gpt-5-mini",
+  "google/gemini-2.5-flash-lite",
+  "anthropic/claude-sonnet-4.5",
+],
+```
+
+## Anonymous Models
+
+Restrict which models anonymous (non-authenticated) users can access:
+
+```ts
+anonymousModels: [
+  "google/gemini-2.5-flash-lite",
+  "openai/gpt-5-mini",
+  "openai/gpt-5-nano",
+  "anthropic/claude-haiku-4.5",
+],
+```
+
+## Task-Specific Defaults
+
+Different tasks use different models by default. This lets you optimize for cost and quality per use case.
+
+| Task                  | Description                                 |
+| --------------------- | ------------------------------------------- |
+| `chat`                | Main conversation model                     |
+| `title`               | Generates chat titles                       |
+| `pdf`                 | PDF document analysis                       |
+| `artifact`            | Creates artifacts (documents, code, sheets) |
+| `artifactSuggestion`  | Suggests artifact improvements              |
+| `followupSuggestions` | Generates follow-up questions               |
+| `suggestions`         | General suggestions                         |
+| `polishText`          | Text refinement                             |
+| `formatSheet`         | Spreadsheet formatting                      |
+| `analyzeSheet`        | Spreadsheet analysis                        |
+| `codeEdits`           | Code modifications                          |
+| `chatImageCompatible` | Chat with image input support               |
+| `image`               | Image generation (see [Image Generation](/features/image-generation)) |
+
+## AI Providers
+
+Available providers should be listed in `config.services.aiProviders`:
+
+```ts
+aiProviders: [
+  "OpenAI", "Anthropic", "xAI", "Google", "Meta",
+  "Mistral", "Alibaba", "Amazon", "Cohere", "DeepSeek",
+  "Perplexity", "Vercel", "Inception", "Moonshot", "Morph", "ZAI",
+],
+```
+
+Model selection and routing is handled through the Vercel AI Gateway.
+
+## Image Models
+
+Image models use a separate `ImageModelId` type. Set the default:
+
+```ts
+defaults: {
+  image: "openai/gpt-image-1.5",
+}
+```
+
+### Model Types
+
+Two types of models can generate images:
+
+| Type | Type Definition | Description |
+| ---- | --------------- | ----------- |
+| Image model | `ImageModelId` | Standalone image models from AI Gateway |
+| Multimodal | `MultimodalImageModelId` | Language models with `image-generation` tag |
+
+The union type `AnyImageModelId` covers both.
+
+### Multimodal Image Models
+
+Language models tagged with `image-generation` in `models.generated.ts` can generate images inline. The `generateImage` tool automatically detects these and uses `generateText` with image output modalities instead of the dedicated `generateImage` API.
+
+```ts title="lib/models/image-model-id.ts"
+export function isMultimodalImageModel(modelId: string): modelId is MultimodalImageModelId {
+  return multimodalImageModelIds.has(modelId);
+}
+```
+
+When a user's selected chat model is multimodal, it's preferred over the default image model—keeping generation within the same model context.
+
+The image model is used by the `generateImage` tool for both generation and edit modes. See [Image Generation](/features/image-generation) for details.

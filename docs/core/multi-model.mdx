@@ -1,0 +1,115 @@
+---
+title: "Multi-Model Support"
+description: "Access 120+ AI models through a unified API"
+---
+
+ChatJS provides access to 120+ models from multiple providers through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway).
+
+## Model Registry Architecture
+
+### Auto-Update (Runtime)
+
+The app fetches available models from the AI Gateway API at runtime. Results are cached for 1 hour.
+
+```typescript
+// lib/ai/models.ts
+export const fetchModels = unstable_cache(
+  async (): Promise<ModelData[]> => {
+    const models = await fetchModelsRaw();
+    return models.map(toModelData);
+  },
+  ["ai-gateway-models"],
+  { revalidate: 3600, tags: ["ai-gateway-models"] }
+);
+```
+
+When no API key is available, the app falls back to a static snapshot in `models.generated.ts`.
+
+### Manual Update (Build-time)
+
+To refresh the fallback snapshot, run:
+
+```bash
+bun fetch:models
+```
+
+This fetches current models from the gateway and writes them to `lib/ai/models.generated.ts`. Run this periodically to keep the fallback fresh.
+
+## Model Configuration
+
+All model settings are configured in `chat.config.ts` under the `models` key:
+
+```typescript title="chat.config.ts"
+models: {
+  providerOrder: ["openai", "google", "anthropic", "xai"],
+  disabledModels: ["morph/morph-v3-large", "morph/morph-v3-fast"],
+  curatedDefaults: [
+    "openai/gpt-5-nano",
+    "openai/gpt-5-mini",
+    "google/gemini-2.5-flash-lite",
+    "anthropic/claude-sonnet-4.5",
+    // ...
+  ],
+  anonymousModels: [
+    "google/gemini-2.5-flash-lite",
+    "openai/gpt-5-mini",
+    // ...
+  ],
+  defaults: {
+    chat: "openai/gpt-5-nano",
+    title: "google/gemini-2.5-flash-lite",
+    pdf: "openai/gpt-5-mini",
+    artifact: "openai/gpt-5-nano",
+    // ...
+  },
+},
+```
+
+| Setting           | Description                             |
+| ----------------- | --------------------------------------- |
+| `providerOrder`   | Provider sort order in model selector   |
+| `disabledModels`  | Models hidden from all users            |
+| `curatedDefaults` | Models enabled by default for new users |
+| `anonymousModels` | Models available to anonymous users     |
+| `defaults.*`      | Default model for each task type        |
+
+<Note>
+Image generation uses a separate `defaults.image` setting. Language models with the `image-generation` tag can also generate images inline. See [Image Generation](/features/image-generation) for details.
+</Note>
+
+## Reasoning Variants
+
+Models that support extended thinking are automatically split into two variants:
+
+- `{model-id}` (standard mode)
+- `{model-id}-reasoning` (extended thinking enabled)
+
+This happens automatically in `buildAppModels()` for any model with `reasoning: true`.
+
+## Visibility Pipeline
+
+Model visibility is determined through a pipeline:
+
+### Authenticated Users
+
+1. **Remove** disabled models (`models.disabledModels`)
+2. **Apply defaults** (`models.curatedDefaults` + any new API models not in `models.generated.ts`)
+3. **Apply user overrides** from saved preferences
+
+### Anonymous Users
+
+1. **Remove** disabled models
+2. **Filter** to `models.anonymousModels` only
+
+## User Settings
+
+Users configure their model preferences at `/settings/models`. This page lets users toggle individual models on or off. A link to [AI Registry](https://airegistry.app) provides detailed model information.
+
+## Environment Variables
+
+The AI Gateway handles authentication with all providers. You do not need individual API keys for OpenAI, Anthropic, Google, etc. Instead, you authenticate with the gateway using one of these:
+
+- `VERCEL_OIDC_TOKEN` (automatically provided on Vercel deployments)
+- `AI_GATEWAY_API_KEY` (for non-Vercel deployments, obtain from [Vercel AI Gateway](https://vercel.com/docs/ai-gateway))
+
+Without either key, the app uses the fallback model list and cannot make API calls to providers.

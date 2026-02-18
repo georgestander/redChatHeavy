@@ -1,0 +1,202 @@
+---
+title: "Follow-up Questions"
+description: "Generate and display contextual follow-up suggestions"
+---
+
+> Suggest follow-up questions after AI responses, shown only on the last message.
+
+## Overview
+
+After the AI responds, generate contextual follow-up questions using a fast model. These are streamed as `data-*` parts which are UI-only - they're filtered out before sending context to the LLM.
+
+File convention: `lib/ai/followup-suggestions.ts` → `components/followup-suggestions.tsx`
+
+## How it works
+
+1. **Generate** suggestions after the main response using a cheap/fast model
+2. **Stream** as `data-followupSuggestions` part (data-\* prefix = UI-only)
+3. **Ignore** data-\* parts via `convertToModelMessages({ convertDataPart: () => undefined })`
+4. **Render** only on the last message
+
+## Code
+
+### 1. Generate & Stream Suggestions
+
+```ts title="lib/ai/followup-suggestions.ts"
+import { type ModelMessage, Output, streamText } from "ai";
+import { z } from "zod";
+import { getLanguageModel } from "@/lib/ai/providers";
+import type { StreamWriter } from "@/lib/ai/types";
+import { config } from "@/lib/config";
+import { generateUUID } from "@/lib/utils";
+
+export async function generateFollowupSuggestions(
+  modelMessages: ModelMessage[]
+) {
+  return streamText({
+    model: await getLanguageModel(
+      config.models.defaults.followupSuggestions
+    ),
+    messages: [
+      ...modelMessages,
+      {
+        role: "user",
+        content:
+          "What question should I ask next? Return an array of 3-5 suggestions, max 80 chars each.",
+      },
+    ],
+    output: Output.object({
+      schema: z.object({
+        suggestions: z.array(z.string()).min(3).max(5),
+      }),
+    }),
+  });
+}
+
+export async function streamFollowupSuggestions({
+  followupSuggestionsResult,
+  writer,
+}: {
+  followupSuggestionsResult: ReturnType<typeof generateFollowupSuggestions>;
+  writer: StreamWriter;
+}) {
+  const dataPartId = generateUUID();
+  const result = await followupSuggestionsResult;
+
+  for await (const chunk of result.partialOutputStream) {
+    writer.write({
+      id: dataPartId,
+      type: "data-followupSuggestions", // data-* = UI-only, filtered from LLM context
+      data: {
+        suggestions:
+          chunk.suggestions?.filter((s): s is string => s !== undefined) ?? [],
+      },
+    });
+  }
+}
+```
+
+### 2. Call After Response
+
+```ts title="app/(chat)/api/chat/route.ts"
+// Inside createUIMessageStream execute callback, after result.consumeStream()
+await result.consumeStream();
+
+const response = await result.response;
+const responseMessages = response.messages;
+
+// Generate and stream follow-up suggestions
+const followupSuggestionsResult = generateFollowupSuggestions([
+  ...contextForLLM,
+  ...responseMessages,
+]);
+await streamFollowupSuggestions({
+  followupSuggestionsResult,
+  writer: dataStream,
+});
+```
+
+### 3. Ignore Data Parts in Conversion
+
+```ts title="lib/ai/core-chat-agent.ts"
+import { convertToModelMessages } from "ai";
+
+// Convert to model messages, ignoring data-* parts (UI-only)
+const modelMessages = await convertToModelMessages(messages, {
+  convertDataPart: () => undefined, // Ignores all data-* parts
+});
+```
+
+### 4. Render on Last Message Only
+
+```tsx title="components/followup-suggestions.tsx"
+"use client";
+
+import { useChatStoreApi } from "@ai-sdk-tools/store";
+import { useMessageIds } from "@/lib/stores/hooks-base";
+import {
+  useMessagePartByPartIdx,
+  useMessagePartTypesById,
+} from "@/lib/stores/hooks-message-parts";
+import type { ChatMessage } from "@/lib/ai/types";
+import { generateUUID } from "@/lib/utils";
+
+export function FollowUpSuggestionsParts({ messageId }: { messageId: string }) {
+  const types = useMessagePartTypesById(messageId);
+  const ids = useMessageIds();
+  const isLastMessage = ids.at(-1) === messageId;
+
+  // Only show on the last message
+  if (!isLastMessage) {
+    return null;
+  }
+
+  const partIdx = types.indexOf("data-followupSuggestions");
+  if (partIdx === -1) {
+    return null;
+  }
+
+  return <FollowUpSuggestionsPart messageId={messageId} partIdx={partIdx} />;
+}
+
+function FollowUpSuggestionsPart({
+  messageId,
+  partIdx,
+}: {
+  messageId: string;
+  partIdx: number;
+}) {
+  const part = useMessagePartByPartIdx(
+    messageId,
+    partIdx,
+    "data-followupSuggestions"
+  );
+
+  return <FollowUpSuggestions suggestions={part.data.suggestions} />;
+}
+
+export function FollowUpSuggestions({
+  suggestions,
+}: {
+  suggestions: string[];
+}) {
+  const storeApi = useChatStoreApi();
+
+  const handleClick = (suggestion: string) => {
+    const sendMessage = storeApi.getState().sendMessage;
+    const parentMessageId = storeApi.getState().getLastMessageId();
+
+    const message: ChatMessage = {
+      id: generateUUID(),
+      role: "user",
+      parts: [{ type: "text", text: suggestion }],
+      metadata: {
+        createdAt: new Date(),
+        parentMessageId,
+        selectedModel: "your-default-model", // Get from context
+      },
+    };
+
+    sendMessage(message);
+  };
+
+  if (!suggestions?.length) return null;
+
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      <div className="text-xs text-muted-foreground">Related</div>
+      <div className="flex flex-wrap gap-1.5">
+        {suggestions.map((s) => (
+          <button
+            key={s}
+            onClick={() => handleClick(s)}
+            className="rounded-md border px-2 py-1 text-sm hover:bg-muted"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+```

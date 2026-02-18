@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "app/**",
+      "components/**",
+      "hooks/**",
+      "lib/**",
+      "providers/**",
+      "scripts/**",
+      "src/**",
+      "types/**",
+      "!**/*.css",
+      "!components/ui",
+      "!components/ai-elements",
+      "!components/streamdown",
+      "!components/stick-to-bottom",
+      "!lib/utils.ts",
+      "!hooks/use-mobile.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "linter": {
+    "rules": {
+      "correctness": {
+        /* Existing chat-sync hooks patterns intentionally diverge during migration */
+        "useHookAtTopLevel": "off"
+      },
+      "suspicious": {
+        /* Needs more work to fix */
+        "noExplicitAny": "off"
+      }
+    }
+  }
+}

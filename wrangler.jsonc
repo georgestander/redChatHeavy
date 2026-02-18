@@ -1,0 +1,38 @@
+{
+  "main": "./src/worker.tsx",
+  "compatibility_date": "2026-02-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [
+    {
+      "binding": "KV_CACHE",
+      "id": "00000000000000000000000000000000"
+    },
+    {
+      "binding": "KV_RATE_LIMIT",
+      "id": "11111111111111111111111111111111"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2_ATTACHMENTS",
+      "bucket_name": "placeholder-r2-attachments"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "STREAM_BUFFER_DO",
+        "class_name": "StreamBufferDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["StreamBufferDO"]
+    }
+  ],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
+}

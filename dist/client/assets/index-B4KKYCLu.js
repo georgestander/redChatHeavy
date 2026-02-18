@@ -1,0 +1,2 @@
+import{r as l}from"./client-BXVv_YeC.js";function s(n,o){if(typeof n=="function")return n(o);n!=null&&(n.current=o)}function f(...n){return o=>{let u=!1;const c=n.map(t=>{const e=s(t,o);return!u&&typeof e=="function"&&(u=!0),e});if(u)return()=>{for(let t=0;t<c.length;t++){const e=c[t];typeof e=="function"?e():s(n[t],null)}}}}function r(...n){return l.useCallback(f(...n),n)}export{f as c,r as u};
+//# sourceMappingURL=index-B4KKYCLu.js.map

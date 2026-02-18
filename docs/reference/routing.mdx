@@ -1,0 +1,26 @@
+---
+title: URL Routing
+description: URL structure and pathname parsing utilities
+---
+
+This page explains the URL routing structure used in ChatJS.
+
+## Route Types
+
+| Route Pattern | Description |
+|---------------|-------------|
+| `/` | Home page, provisional chat (not yet persisted) |
+| `/chat/:id` | Standalone chat page |
+| `/share/:id` | Public shared chat page (read-only) |
+| `/project/:projectId` | Project page, provisional chat within project |
+| `/project/:projectId/chat/:chatId` | Chat within a project |
+
+## Parsing Pathnames
+
+Use `parseChatIdFromPathname` from `@/providers/parse-chat-id-from-pathname` to extract chat ID, project ID, and route source from any pathname.
+
+## Related Hooks
+
+- **`useChatId()`** - Returns the current chat ID context including `source` (check `source === "share"` for shared routes)
+
+See [Provisional Chat IDs](/cookbook/provisional-ids) for how chat IDs enable seamless client-side navigation.

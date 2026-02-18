@@ -1,0 +1,2 @@
+const e=6048e5,u=864e5,f=43200,m=1440,s=Symbol.for("constructDateFrom");function r(n,t){return typeof n=="function"?n(t):n&&typeof n=="object"&&s in n?n[s](t):n instanceof Date?new n.constructor(t):new Date(t)}function i(n,t){return r(t||n,n)}function a(n,...t){const o=r.bind(null,n||t.find(c=>typeof c=="object"));return t.map(o)}function y(n,t){const o=i(n,t?.in);return o.setHours(0,0,0,0),o}export{e as a,m as b,r as c,f as d,u as m,a as n,y as s,i as t};
+//# sourceMappingURL=startOfDay-DFs_GiEJ.js.map

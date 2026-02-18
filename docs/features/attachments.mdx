@@ -1,0 +1,92 @@
+---
+title: "Attachments"
+description: "Upload images and PDFs to conversations"
+---
+
+ChatJS supports file attachments in conversations. Files are uploaded to Vercel Blob storage and processed by AI models that support multimodal input.
+
+<Note>
+  File attachments require `BLOB_READ_WRITE_TOKEN`. If you don't need attachments, set `integrations.attachments: false` in `chat.config.ts` to run ChatJS without this env var.
+</Note>
+
+## Supported File Types
+
+| Type | Extensions | Processing |
+|------|------------|------------|
+| Images | `.png`, `.jpg`, `.jpeg` | Direct vision input |
+| PDFs | `.pdf` | Text extraction |
+
+## How It Works
+
+1. User attaches file in chat input
+2. File uploads to Vercel Blob
+3. URL/content included in message
+4. Model processes based on type
+
+## Configuration
+
+### Enable/Disable
+
+Toggle attachments in `chat.config.ts`:
+
+```ts
+integrations: {
+  attachments: true, // Requires BLOB_READ_WRITE_TOKEN
+}
+```
+
+When disabled:
+- Attachment button is hidden from the chat input
+- Drag-and-drop and paste file handling are disabled
+- File upload API returns 503
+
+### Environment Variables
+
+Requires `BLOB_READ_WRITE_TOKEN` from Vercel Blob:
+
+```bash
+BLOB_READ_WRITE_TOKEN=vercel_blob_...
+```
+
+On Vercel, this is auto-provided via the Blob integration.
+
+### Attachment Settings
+
+File attachment settings are configured in `chat.config.ts` under the `attachments` key:
+
+```typescript
+attachments: {
+  maxBytes: 1024 * 1024,  // 1MB max after compression
+  maxDimension: 2048,     // Max image width/height
+  acceptedTypes: {
+    "image/png": [".png"],
+    "image/jpeg": [".jpg", ".jpeg"],
+    "application/pdf": [".pdf"],
+  },
+},
+```
+
+## Mobile Behavior
+
+On mobile devices, the attachment button shows a dropdown menu with separate options:
+
+- **Add photos** - Opens the device photo gallery
+- **Take photo** - Opens the camera directly
+- **Add files** - Opens the file browser for PDFs and documents
+
+This granular selection is intentional: some mobile platforms default to the image picker when the file input accepts both images and other file types, making it difficult for users to select non-image files like PDFs.
+
+## Model Support
+
+Not all models support attachments. Check `model.input` for capability:
+
+```typescript
+if (model.input?.image) {
+  // Model supports image inputs
+}
+if (model.input?.pdf) {
+  // Model supports PDF inputs
+}
+```
+
+When a user attaches a file that the current model doesn't support, ChatJS automatically switches to a compatible model (configured via `config.models.defaults.pdf` and `config.models.defaults.chatImageCompatible`).

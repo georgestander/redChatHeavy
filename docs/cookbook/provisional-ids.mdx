@@ -1,0 +1,149 @@
+---
+title: Provisional Chat IDs
+description: Enable seamless client-side navigation from homepage to chat page without full page reloads
+---
+
+This pattern allows users to start typing on the homepage and smoothly transition to a persisted chat page when they send their first message. No server-side navigation or page reload occurs.
+
+## The Problem
+
+In a typical chat application, creating a new chat requires:
+
+1. User submits a message
+2. Server creates a chat record and returns an ID
+3. Client navigates to `/chat/:id`
+4. Page reloads, components remount, state is lost
+
+This creates a jarring experience with a visible page refresh.
+
+## The Solution
+
+ChatJS generates a provisional UUID on the client before the user sends any message. When the message is submitted, the chat is persisted with that same ID. Because the ID never changes, React components do not remount and the transition is seamless.
+
+## How It Works
+
+### 1. ChatIdProvider Generates Provisional IDs
+
+The `ChatIdProvider` creates a provisional UUID when a user visits the homepage:
+
+```typescript
+const [{ provisionalChatId, confirmedChatId }, setChatIdState] = useState<{
+  provisionalChatId: string;
+  confirmedChatId: string | null;
+}>(() => ({
+  provisionalChatId: generateUUID(),
+  confirmedChatId: null,
+}));
+```
+
+The provider exposes the current chat ID through context. If the URL contains a chat ID (like `/chat/abc123`), that ID is used. Otherwise, the provisional ID is returned:
+
+```typescript
+const value = useMemo(() => ({
+  id: resolvedId.id ?? provisionalChatId,
+  type: resolvedId.type,
+  isPersisted: /* ... */,
+  confirmChatId: confirmChatIdPersisted,
+  refreshChatID,
+}), [/* deps */]);
+```
+
+### 2. ChatSystem Uses ID as React Keys
+
+The `ChatSystem` component uses the chat ID as React keys for its providers:
+
+```tsx
+<DataStreamProvider key={id}>
+  <CustomStoreProvider<ChatMessage> initialMessages={initialMessages} key={id}>
+    {/* ... */}
+  </CustomStoreProvider>
+</DataStreamProvider>
+```
+
+When you navigate to a different chat, the ID changes and these components remount with fresh state. When you submit a message on the homepage, the ID stays the same (the provisional ID becomes the persisted ID) so nothing remounts.
+
+### 3. URL Updates Without Navigation
+
+After the chat is persisted, the URL is updated using the History API:
+
+```typescript
+window.history.pushState(null, "", `/chat/${chatId}`);
+```
+
+This changes the URL without triggering a Next.js navigation or page reload.
+
+### 4. New Chat Resets State
+
+When starting a new chat, buttons like `NewChatButton` and `SidebarTopRow` call `refreshChatID`:
+
+```typescript
+const refreshChatID = useCallback(() => {
+  const newId = generateUUID();
+  setChatIdState({ provisionalChatId: newId, confirmedChatId: null });
+  window.history.pushState(null, "", "/");
+}, []);
+```
+
+This generates a fresh provisional ID and navigates to the homepage. Because the ID changed, components keyed by the ID remount with fresh state.
+
+### 5. Server Confirms Persistence
+
+On new chat creation, the server emits a `data-chatConfirmed` event:
+
+```typescript
+// Only sent when isNewChat is true
+if (isNewChat) {
+  dataStream.write({
+    id: generateUUID(),
+    type: "data-chatConfirmed",
+    data: { chatId },
+    transient: true,
+  });
+}
+```
+
+The `DataStreamHandler` only confirms the chat ID if it matches the current provisional ID, preventing stale confirmations from affecting newer chats:
+
+```typescript
+if (
+  delta.type === "data-chatConfirmed" &&
+  isAuthenticated &&
+  id === delta.data.chatId
+) {
+  confirmChatId(delta.data.chatId);
+}
+```
+
+## The Flow
+
+1. **Visit homepage (`/`)** — `ChatIdProvider` generates provisional ID `abc123`
+2. **User types message** — ID is still `abc123` (provisional)
+3. **User submits message** — Chat saved to database with ID `abc123`
+4. **Server confirms** — `data-chatConfirmed` event emitted (only on new chats)
+5. **Client validates** — `DataStreamHandler` checks `chatId` matches current provisional ID before confirming
+6. **URL updates** — Changes to `/chat/abc123` via History API (no reload)
+7. **Components stay mounted** — Key unchanged, no remount
+8. **User clicks "New Chat"** — `refreshChatID` generates new ID, components remount with fresh state
+
+## Key Components
+
+| Component           | Responsibility                                                            |
+| ------------------- | ------------------------------------------------------------------------- |
+| `ChatIdProvider`    | Generates and manages provisional/confirmed chat IDs                      |
+| `ChatSystem`        | Uses ID as React key to control component lifecycle                       |
+| `DataStreamHandler` | Listens for `data-chatConfirmed` and validates ID match before confirming |
+| `ChatInputProvider` | Manages input state with localStorage persistence                         |
+| `NewChatButton`     | Calls `refreshChatID` to start fresh                                      |
+| `SidebarTopRow`     | Calls `refreshChatID` when logo is clicked                                |
+
+## Benefits
+
+- **No page flicker**: The transition from provisional to persisted is invisible to users
+- **Preserved state**: Input attachments, model selection, and scroll position remain intact
+- **Predictable IDs**: The chat ID is known before persistence, enabling optimistic UI patterns
+- **Clean separation**: New chats get fresh state through React key changes
+
+## Related
+
+- [URL Routing](/reference/routing) for pathname parsing utilities
+- [Resumable Streams](/cookbook/resumable-streams) for handling page refreshes during streaming

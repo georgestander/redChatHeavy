@@ -1,0 +1,39 @@
+---
+title: Database
+description: Database setup, migrations, and development workflows
+---
+
+ChatJS uses PostgreSQL with Drizzle ORM for type-safe database access.
+
+## Schema
+
+The database schema is defined in `lib/db/schema.ts`.
+
+## Migrations
+
+Generate and run migrations with:
+
+```bash
+# Generate migration from schema changes
+bun db:generate
+
+# Run pending migrations
+bun db:migrate
+
+# Push schema directly (dev only, no migration file)
+bun db:push
+```
+
+## Neon Branching
+
+When working on schema changes, use Neon branching to avoid affecting production data. See the [Neon Branching recipe](/cookbook/neon-branching) for setup and usage.
+
+## Drizzle Studio
+
+Inspect your database with Drizzle Studio:
+
+```bash
+bun db:studio
+```
+
+Opens a web UI at `https://local.drizzle.studio` for browsing and editing data.

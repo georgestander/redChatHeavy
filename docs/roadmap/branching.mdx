@@ -1,0 +1,23 @@
+---
+title: Branching
+description: Create alternative conversation paths
+---
+
+<Note>
+  This documentation is coming soon. The pattern is implemented in the starter app.
+</Note>
+
+## Problem
+
+Users want to explore different conversation directions without losing context.
+
+## Solution
+
+Implement a tree structure for messages with parent references, allowing users to branch off at any point.
+
+## Implementation Overview
+
+1. **Data Model**: Messages store `parentId` for tree structure
+2. **Navigation**: UI for switching between branches
+3. **Context**: Proper history construction when loading branches
+

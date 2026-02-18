@@ -1,0 +1,139 @@
+{
+  "_index-CPesPnUn.mjs": {
+    "file": "assets/index-CPesPnUn.mjs",
+    "name": "index",
+    "dynamicImports": [
+      "dist/worker/assets/settings-D5NWtBvo.mjs",
+      "dist/worker/assets/vote-sJwKlae4.mjs",
+      "dist/worker/assets/project-Cwy3jbFk.mjs",
+      "dist/worker/assets/credits-DDlQ3Ab6.mjs",
+      "dist/worker/assets/chat-DSVyH--d.mjs",
+      "dist/worker/assets/mcp-CVNwIaLh.mjs",
+      "dist/worker/assets/document-Caj9SmU3.mjs",
+      "dist/worker/assets/mcp-queries-Ch9BqnxD.mjs",
+      "dist/worker/assets/index-DH4VOXNy.mjs",
+      "dist/worker/assets/index-BZUOGsgi.mjs",
+      "dist/worker/assets/index-BZUOGsgi.mjs",
+      "dist/worker/assets/bun-sqlite-dialect-BSGVsdYI.mjs",
+      "dist/worker/assets/node-sqlite-dialect-DdrqUnes.mjs"
+    ]
+  },
+  "dist/worker/assets/bun-sqlite-dialect-BSGVsdYI.mjs": {
+    "file": "assets/bun-sqlite-dialect-BSGVsdYI-CgU4lU7F.mjs",
+    "name": "bun-sqlite-dialect-BSGVsdYI",
+    "src": "dist/worker/assets/bun-sqlite-dialect-BSGVsdYI.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/chat-DSVyH--d.mjs": {
+    "file": "assets/chat-DSVyH--d-Cxl3rIoc.mjs",
+    "name": "chat-DSVyH--d",
+    "src": "dist/worker/assets/chat-DSVyH--d.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/credits-DDlQ3Ab6.mjs": {
+    "file": "assets/credits-DDlQ3Ab6-Cppr2SrQ.mjs",
+    "name": "credits-DDlQ3Ab6",
+    "src": "dist/worker/assets/credits-DDlQ3Ab6.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/document-Caj9SmU3.mjs": {
+    "file": "assets/document-Caj9SmU3-D4kH4oKJ.mjs",
+    "name": "document-Caj9SmU3",
+    "src": "dist/worker/assets/document-Caj9SmU3.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/index-BZUOGsgi.mjs": {
+    "file": "assets/index-BZUOGsgi-D0KsPfil.mjs",
+    "name": "index-BZUOGsgi",
+    "src": "dist/worker/assets/index-BZUOGsgi.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/index-DH4VOXNy.mjs": {
+    "file": "assets/index-DH4VOXNy-xNi3zdKs.mjs",
+    "name": "index-DH4VOXNy",
+    "src": "dist/worker/assets/index-DH4VOXNy.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/mcp-CVNwIaLh.mjs": {
+    "file": "assets/mcp-CVNwIaLh-D_Nl0265.mjs",
+    "name": "mcp-CVNwIaLh",
+    "src": "dist/worker/assets/mcp-CVNwIaLh.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs",
+      "dist/worker/assets/mcp-queries-Ch9BqnxD.mjs"
+    ]
+  },
+  "dist/worker/assets/mcp-queries-Ch9BqnxD.mjs": {
+    "file": "assets/mcp-queries-Ch9BqnxD-RNg6oCaj.mjs",
+    "name": "mcp-queries-Ch9BqnxD",
+    "src": "dist/worker/assets/mcp-queries-Ch9BqnxD.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/node-sqlite-dialect-DdrqUnes.mjs": {
+    "file": "assets/node-sqlite-dialect-DdrqUnes-CbP7ffHB.mjs",
+    "name": "node-sqlite-dialect-DdrqUnes",
+    "src": "dist/worker/assets/node-sqlite-dialect-DdrqUnes.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/project-Cwy3jbFk.mjs": {
+    "file": "assets/project-Cwy3jbFk-CTb5O0lK.mjs",
+    "name": "project-Cwy3jbFk",
+    "src": "dist/worker/assets/project-Cwy3jbFk.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/settings-D5NWtBvo.mjs": {
+    "file": "assets/settings-D5NWtBvo-_ooHqiPO.mjs",
+    "name": "settings-D5NWtBvo",
+    "src": "dist/worker/assets/settings-D5NWtBvo.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/assets/vote-sJwKlae4.mjs": {
+    "file": "assets/vote-sJwKlae4-DcLJBLCy.mjs",
+    "name": "vote-sJwKlae4",
+    "src": "dist/worker/assets/vote-sJwKlae4.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  },
+  "dist/worker/index.js": {
+    "file": "index.mjs",
+    "name": "index",
+    "src": "dist/worker/index.js",
+    "isEntry": true,
+    "imports": [
+      "_index-CPesPnUn.mjs"
+    ]
+  }
+}

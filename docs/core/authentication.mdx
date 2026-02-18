@@ -1,0 +1,62 @@
+---
+title: "Authentication"
+description: "User authentication with Better Auth"
+---
+
+ChatJS uses [Better Auth](https://better-auth.com) for authentication, supporting multiple OAuth providers and anonymous guest access.
+
+## Configuration
+
+Enable providers in `chat.config.ts`:
+
+```typescript title="chat.config.ts"
+authentication: {
+  google: false, // Requires AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET
+  github: true,  // Requires AUTH_GITHUB_ID + AUTH_GITHUB_SECRET
+  vercel: false, // Requires VERCEL_APP_CLIENT_ID + VERCEL_APP_CLIENT_SECRET
+},
+```
+
+At least one provider must be enabled and configured.
+
+## Environment Variables
+
+| Provider | Environment Variables |
+|----------|----------------------|
+| GitHub | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` |
+| Google | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` |
+| Vercel | `VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET` |
+
+Config validation runs at build time via `bun run prebuild`. It checks that enabled providers have their required env vars set. Missing vars will fail the build.
+
+## Anonymous Mode
+
+Users can try the app without signing up. Anonymous sessions:
+- Have limited message credits
+- Access a subset of models and tools
+- Do not persist chat history to database
+
+Configure anonymous limits in `chat.config.ts`:
+
+```typescript title="chat.config.ts"
+anonymous: {
+  credits: { production: 10, development: 1000 },
+  availableTools: ["createDocument", "updateDocument"],
+  rateLimit: {
+    requestsPerMinute: { production: 5, development: 60 },
+    requestsPerMonth: { production: 10, development: 1000 },
+  },
+},
+```
+
+Anonymous-available models are configured in `models.anonymousModels`.
+
+## Auth Secret
+
+Generate a secure `AUTH_SECRET`:
+
+```bash
+openssl rand -base64 32
+```
+
+Or use [generate-secret.vercel.app/32](https://generate-secret.vercel.app/32).

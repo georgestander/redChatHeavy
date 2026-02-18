@@ -1,0 +1,56 @@
+2026-02-06 | Task done: T6-1 (Phase 6 resumable stream DO foundation)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T6-1
+- Decisions: start with non-invasive DO core before chat route rewires; add typed adapter now so T6-2/T6-3 can wire fast; keep retention in DO alarm (10m) for deterministic cleanup
+- Files: src/durable-objects/stream-buffer-do.ts; src/lib/stream-buffer/stream-buffer-client.ts; src/worker.tsx; docs/plans/nextjs-to-redwoodsdk-migration-plan.md
+- Blockers/notes: no manual runtime probe yet for append/resume/finalize from chat path; next task T6-2 should add SSE tee parser + batching and integrate adapter
+2026-02-06 | Task done: T6-2/T6-3 (Phase 6 chat tee + DO resume)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T6-2, T6-3
+- Decisions: tee SSE only for authenticated streams; keep client stream non-blocking; parse SSE blocks by `id:` and batch append; keep finalized-message fallback in resume route
+- Files: app/(chat)/api/chat/route.ts; app/(chat)/api/chat/[id]/stream/route.ts; docs/plans/nextjs-to-redwoodsdk-migration-plan.md
+- Blockers/notes: DO binding absence returns 204 for active stream path; finalized fallback still handles post-finalize reloads
+
+2026-02-06 | Task done: T6-4 (Phase 6 remove redis/resumable-stream runtime path)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T6-4
+- Decisions: remove redis/resumable-stream deps now that DO path is active; keep anonymous rate-limit fail-open until KV-based limiter lands in Phase 7
+- Files: app/(chat)/api/chat/route.ts; package.json; pnpm-lock.yaml; docs/plans/nextjs-to-redwoodsdk-migration-plan.md
+- Blockers/notes: follow-up Phase 7 should restore persistent anon rate limiting via KV counters
+2026-02-06 | Task done: T7-2 (Phase 7 KV anon rate limiting)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md Phase 7
+- Decisions: use `KV_RATE_LIMIT` fixed-window keys with TTL; fail open if KV binding missing or errors; preserve existing rate limit headers/messages
+- Files: lib/utils/rate-limit.ts; app/(chat)/api/chat/route.ts; docs/plans/nextjs-to-redwoodsdk-migration-plan.md
+- Blockers/notes: KV counters are best-effort and may undercount/overcount under high concurrency
+2026-02-06 | Task done: T7-1 (Phase 7 KV cache for models + MCP)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T7-1
+- Decisions: keep `unstable_cache`/`revalidateTag` call signatures and swap backend to `KV_CACHE`; preserve runtime-cache fallback when KV binding missing; keep MCP invalidation contract via tag index keys
+- Files: lib/cache/kv-cache.ts; lib/ai/models.ts; lib/ai/app-models.ts; lib/ai/mcp/cache.ts; docs/plans/nextjs-to-redwoodsdk-migration-plan.md
+- Blockers/notes: KV tag index is best-effort and may lag under high parallel writes; runtime fallback still protects local/test flows
+2026-02-07 | Task done: T5-1 (Phase 5 R2 blob adapter + consumer compatibility)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T5-1
+- Decisions: keep blob helper return shapes stable while swapping backend to `R2_ATTACHMENTS`; emit `/api/files/<key>` URLs; support both legacy Vercel blob URLs and new file-route URLs in clone/delete paths
+- Files: lib/blob.ts; app/(chat)/api/files/upload/route.ts; lib/clone-messages.ts; lib/db/queries.ts; lib/ai/tools/generate-image.ts; app/api/cron/cleanup/route.ts; package.json; pnpm-lock.yaml; docs/plans/nextjs-to-redwoodsdk-migration-plan.md
+- Blockers/notes: `/api/files/:key` worker route with auth+range streaming still pending as next Phase 5 slice
+2026-02-07 | Task done: T5-2 (Phase 5 worker file routes + access control)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T5-2
+- Decisions: expose `/api/files/*` through Worker routes; keep upload response shape stable for existing UI; enforce file visibility by checking attachment URLs against owner/public chats (message attachments + generateImage outputs); support byte-range download responses
+- Files: src/worker.tsx; lib/db/queries.ts; docs/plans/nextjs-to-redwoodsdk-migration-plan.md
+- Blockers/notes: route uses wildcard form (`/files/*`) to safely handle encoded keys; remaining API placeholders (`/api/chat`, `/api/chat-model`, `/api/mcp/oauth/callback`, `/api/cron/cleanup`, `/api/dev-login`) still need Worker migration
+2026-02-07 | Task done: T5-2 hardening pass (auth/cache/head semantics)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T5-2
+- Decisions: include `Part.file_url` in attachment authorization checks; force `Cache-Control: private, no-store` on file responses; return `HEAD` metadata without fetching R2 body
+- Files: src/worker.tsx; lib/db/queries.ts; docs/plans/nextjs-to-redwoodsdk-migration-plan.md; progress.txt
+- Blockers/notes: none
+2026-02-07 | Task done: T8-1 (Phase 8 cron cleanup route + scheduled runner)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T8-1
+- Decisions: route `/api/cron/cleanup` now runs in worker with Bearer `CRON_SECRET`; scheduled handler reuses same cleanup logic on `0 * * * *`; cleanup URL set expanded to include `Part.file_url`
+- Files: src/worker.tsx; lib/db/queries.ts; docs/plans/nextjs-to-redwoodsdk-migration-plan.md; progress.txt
+- Blockers/notes: manual route returns 401 when `CRON_SECRET` missing by design
+2026-02-07 | Task done: T9-1 (Phase 9 remove dead Next + Storybook artifacts)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T9-1
+- Decisions: remove unused Next-era files (`instrumentation.ts`, `next.config.ts`, `proxy.ts`) and Storybook artifacts; prune direct deps tied to removed surface; defer `vercel.json` removal to a deployment-specific follow-up
+- Files: instrumentation.ts; next.config.ts; proxy.ts; .storybook/main.ts; .storybook/preview.ts; components/ai-elements/Response.stories.tsx; components/research-progress.stories.tsx; components/sandbox.stories.tsx; components/thinking-message.stories.tsx; package.json; pnpm-lock.yaml; docs/plans/nextjs-to-redwoodsdk-migration-plan.md; progress.txt
+- Blockers/notes: none
+2026-02-07 | Task done: T9-2 (Phase 9 remove vercel config + preserve docs wildcard routing)
+- PRD ref: docs/plans/nextjs-to-redwoodsdk-migration-plan.md T9-2
+- Decisions: remove deferred `vercel.json` now that Worker cron is active; preserve `/docs/*` behavior via Worker redirect to Mintlify; fix `/docs` page link target to external docs
+- Files: vercel.json; src/worker.tsx; src/app/pages/docs.tsx; docs/plans/nextjs-to-redwoodsdk-migration-plan.md; progress.txt
+- Blockers/notes: none

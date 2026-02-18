@@ -1,0 +1,163 @@
+---
+title: "Configuration"
+description: "Customize ChatJS via chat.config.ts"
+---
+
+All feature toggles and app settings live in `chat.config.ts`. It is parsed and exported as `config` from `@/lib/config`.
+
+## Config Structure
+
+```typescript title="chat.config.ts"
+import type { ConfigInput } from "@/lib/config-schema";
+
+const config: ConfigInput = {
+  appName: "Your App Name",
+  appPrefix: "your-app",
+  githubUrl: "https://github.com/you/your-app",
+
+  organization: {
+    name: "Your Company",
+    contact: {
+      privacyEmail: "privacy@example.com",
+      legalEmail: "legal@example.com",
+    },
+  },
+
+  integrations: {
+    sandbox: true,         // Code execution (Python/JS)
+    webSearch: true,       // Tavily/Exa web search
+    mcp: true,             // MCP connector support
+    imageGeneration: true, // AI image generation
+  },
+
+  authentication: {
+    google: true,
+    github: true,
+    vercel: false,
+  },
+
+  // ... more options
+};
+
+export default config;
+```
+
+## Integrations
+
+Toggle features on/off. Set to `true` to enable. Missing env vars are caught at build time via `bun run prebuild`.
+
+| Integration | Config Key | Env Dependency |
+|-------------|------------|----------------|
+| Code Sandbox | `integrations.sandbox` | `VERCEL_OIDC_TOKEN` (on Vercel) or `VERCEL_TEAM_ID + VERCEL_PROJECT_ID + VERCEL_TOKEN` |
+| Web Search | `integrations.webSearch` | `TAVILY_API_KEY` or `FIRECRAWL_API_KEY` |
+| MCP Connectors | `integrations.mcp` | `MCP_ENCRYPTION_KEY` |
+| Image Generation | `integrations.imageGeneration` | `BLOB_READ_WRITE_TOKEN` |
+| Attachments | `integrations.attachments` | `BLOB_READ_WRITE_TOKEN` |
+
+```typescript
+integrations: {
+  sandbox: true,         // Vercel-native, requires VERCEL_OIDC_TOKEN
+  webSearch: true,       // Requires TAVILY_API_KEY or FIRECRAWL_API_KEY
+  mcp: false,            // Requires MCP_ENCRYPTION_KEY
+  imageGeneration: true, // Requires BLOB_READ_WRITE_TOKEN
+  attachments: true,     // Requires BLOB_READ_WRITE_TOKEN
+},
+```
+
+## Authentication
+
+Set to `true` to enable providers. Missing env vars are caught at server startup.
+
+```typescript
+authentication: {
+  google: false, // Requires AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET
+  github: true,  // Requires AUTH_GITHUB_ID + AUTH_GITHUB_SECRET
+  vercel: false, // Requires VERCEL_APP_CLIENT_ID + VERCEL_APP_CLIENT_SECRET
+},
+```
+
+## Branding
+
+Customize app name and organization details:
+
+```typescript
+appName: "ChatJS",
+appTitle: "ChatJS - The prod ready AI chat template",
+appPrefix: "chatjs",
+githubUrl: "https://github.com/franciscomoretti/chatjs",
+
+organization: {
+  name: "Your Company",
+  contact: {
+    privacyEmail: "privacy@example.com",
+    legalEmail: "legal@example.com",
+  },
+},
+```
+
+## Using Config in Components
+
+Import directly in both server and client components:
+
+```typescript
+import { config } from "@/lib/config";
+
+export function MyComponent() {
+  return <div>{config.appName}</div>;
+}
+```
+
+## Type Definition
+
+Full type reference:
+
+```typescript
+export type Config = {
+  githubUrl: string;
+  appPrefix: string;
+  appName: string;
+  /** Browser tab title (defaults to appName) */
+  appTitle?: string;
+  appDescription: string;
+  appUrl: string;
+  organization: {
+    name: string;
+    contact: {
+      privacyEmail: string;
+      legalEmail: string;
+    };
+  };
+  services: {
+    hosting: string;
+    aiProviders: string[];
+    paymentProcessors: string[];
+  };
+  integrations: {
+    sandbox: boolean;
+    webSearch: boolean;
+    mcp: boolean;
+    imageGeneration: boolean;
+    attachments: boolean;
+  };
+  pricing?: PricingConfig;
+  legal: {
+    minimumAge: number;
+    governingLaw: string;
+    refundPolicy: string;
+  };
+  policies: {
+    privacy: { title: string; lastUpdated?: string };
+    terms: { title: string; lastUpdated?: string };
+  };
+  authentication: {
+    google: boolean;
+    github: boolean;
+    vercel: boolean;
+  };
+  models: ModelsConfig;
+  anonymous: AnonymousConfig;
+  attachments: AttachmentsConfig;
+};
+```
+
+See [Config Reference](/reference/config) for full type definitions of `ModelsConfig`, `AnonymousConfig`, and `AttachmentsConfig`.
