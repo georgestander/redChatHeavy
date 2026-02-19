@@ -111,6 +111,7 @@ function PureMultimodalInput({
     setSelectedTool,
     attachments,
     setAttachments,
+    activeBranchId,
     selectedModelId,
     handleModelChange,
     getInputValue,
@@ -344,6 +345,7 @@ function PureMultimodalInput({
       metadata: {
         createdAt: new Date(),
         parentMessageId: effectiveParentMessageId,
+        branchId: activeBranchId ?? null,
         selectedModel: selectedModelId,
         activeStreamId: null,
         selectedTool: selectedTool || undefined,
@@ -371,6 +373,7 @@ function PureMultimodalInput({
     saveChatMessage,
     parentMessageId,
     selectedModelId,
+    activeBranchId,
     editorRef,
     lastMessageId,
     onSendMessage,

@@ -26,6 +26,12 @@ import {
   serializeAnonymousSessionCookie,
 } from "@/lib/anonymous-session";
 import { auth } from "@/lib/auth";
+import {
+  buildContextForBranchSend,
+  ensureRootBranchForChat,
+  resolveBranchIdForIncomingMessage,
+  updateBranchHeadForMessage,
+} from "@/lib/branching/service";
 import { config } from "@/lib/config";
 import { createAnonymousSession } from "@/lib/create-anonymous-session";
 import { CostAccumulator } from "@/lib/credits/cost-accumulator";
@@ -60,12 +66,12 @@ import {
   type RateLimitKV,
 } from "@/lib/utils/rate-limit";
 import { generateTitleFromUserMessage } from "../../actions";
-import { getThreadUpToMessageId } from "./get-thread-up-to-message-id";
 
 type SseChunk = string | Uint8Array;
 const SSE_BLOCK_SEPARATOR = "\n\n";
 const STREAM_BUFFER_BATCH_SIZE = 24;
 const STREAM_BUFFER_FLUSH_DELAY_MS = 120;
+const MAX_PREVIOUS_CONTEXT_TOKENS = 20_000;
 
 function runInBackground(task: () => Promise<unknown>): void {
   void task().catch((error) => {
@@ -328,11 +334,16 @@ async function handleChatValidation({
   userId: string;
   userMessage: ChatMessage;
   projectId?: string;
-}): Promise<{ error: Response | null; isNewChat: boolean }> {
+}): Promise<{
+  error: Response | null;
+  isNewChat: boolean;
+  resolvedBranchId: string | null;
+}> {
   const log = createModuleLogger("api:chat:validation");
 
   const chat = await getChatById({ id: chatId });
   let isNewChat = false;
+  let resolvedBranchId: string | null = null;
 
   if (chat) {
     if (chat.userId !== userId) {
@@ -340,6 +351,7 @@ async function handleChatValidation({
       return {
         error: new Response("Unauthorized", { status: 401 }),
         isNewChat,
+        resolvedBranchId,
       };
     }
   } else {
@@ -349,13 +361,28 @@ async function handleChatValidation({
     });
 
     await saveChat({ id: chatId, userId, title, projectId });
+    await ensureRootBranchForChat({
+      chatId,
+      title: "Main",
+    });
   }
+
+  resolvedBranchId = await resolveBranchIdForIncomingMessage({
+    chatId,
+    requestedBranchId: userMessage.metadata.branchId ?? null,
+    parentMessageId: userMessage.metadata.parentMessageId,
+  });
+  userMessage.metadata.branchId = resolvedBranchId;
 
   const [existentMessage] = await getMessageById({ id: userMessage.id });
 
   if (existentMessage && existentMessage.chatId !== chatId) {
     log.warn("Unauthorized - message chatId mismatch");
-    return { error: new Response("Unauthorized", { status: 401 }), isNewChat };
+    return {
+      error: new Response("Unauthorized", { status: 401 }),
+      isNewChat,
+      resolvedBranchId,
+    };
   }
 
   if (!existentMessage) {
@@ -365,9 +392,17 @@ async function handleChatValidation({
       chatId,
       message: userMessage,
     });
+    if (resolvedBranchId) {
+      await updateBranchHeadForMessage({
+        branchId: resolvedBranchId,
+        messageId: userMessage.id,
+      });
+    }
+  } else {
+    userMessage.metadata.branchId = existentMessage.branchId ?? resolvedBranchId;
   }
 
-  return { error: null, isNewChat };
+  return { error: null, isNewChat, resolvedBranchId };
 }
 
 async function checkUserCanSpend(userId: string): Promise<Response | null> {
@@ -394,6 +429,7 @@ async function prepareChatForRequest({
   error: Response | null;
   isNewChat: boolean;
   updatedAnonymousSession: AnonymousSession | null;
+  resolvedBranchId: string | null;
 }> {
   if (userId) {
     const validationResult = await handleChatValidation({
@@ -415,6 +451,7 @@ async function prepareChatForRequest({
         error: creditError,
         isNewChat: validationResult.isNewChat,
         updatedAnonymousSession: null,
+        resolvedBranchId: validationResult.resolvedBranchId,
       };
     }
 
@@ -422,6 +459,7 @@ async function prepareChatForRequest({
       error: null,
       isNewChat: validationResult.isNewChat,
       updatedAnonymousSession: null,
+      resolvedBranchId: validationResult.resolvedBranchId,
     };
   }
 
@@ -434,10 +472,16 @@ async function prepareChatForRequest({
         ...anonymousSession,
         remainingCredits: anonymousSession.remainingCredits - 1,
       },
+      resolvedBranchId: null,
     };
   }
 
-  return { error: null, isNewChat: false, updatedAnonymousSession: null };
+  return {
+    error: null,
+    isNewChat: false,
+    updatedAnonymousSession: null,
+    resolvedBranchId: null,
+  };
 }
 
 /**
@@ -567,6 +611,7 @@ async function createChatStream({
       const initialMetadata: ChatMessage["metadata"] = {
         createdAt: new Date(),
         parentMessageId: userMessage.id,
+        branchId: userMessage.metadata.branchId ?? null,
         selectedModel: selectedModelId,
         activeStreamId: isAnonymous ? null : streamId,
       };
@@ -692,6 +737,7 @@ async function executeChatRequest({
         metadata: {
           createdAt: new Date(),
           parentMessageId: userMessage.id,
+          branchId: userMessage.metadata.branchId ?? null,
           selectedModel: selectedModelId,
           selectedTool: undefined,
           activeStreamId: streamId,
@@ -869,15 +915,43 @@ async function prepareRequestContext({
 
   const messageThreadToParent = isAnonymous
     ? anonymousPreviousMessages
-    : await getThreadUpToMessageId(
-        chatId,
-        userMessage.metadata.parentMessageId
-      );
+    : await (async () => {
+        const branchContext = await buildContextForBranchSend({
+          chatId,
+          requestedBranchId: userMessage.metadata.branchId ?? null,
+          parentMessageId: userMessage.metadata.parentMessageId,
+        });
+        if (!userMessage.metadata.branchId) {
+          userMessage.metadata.branchId = branchContext.branchId;
+        }
+        return branchContext.previousMessages;
+      })();
 
-  const previousMessages = messageThreadToParent.slice(-5);
+  const previousMessages = await trimPreviousMessagesByTokenBudget(
+    messageThreadToParent,
+    MAX_PREVIOUS_CONTEXT_TOKENS
+  );
   log.debug({ allowedTools }, "allowed tools");
 
   return { previousMessages, allowedTools, error: null };
+}
+
+async function trimPreviousMessagesByTokenBudget(
+  messages: ChatMessage[],
+  tokenBudget: number
+): Promise<ChatMessage[]> {
+  if (messages.length === 0) {
+    return messages;
+  }
+
+  let candidate = messages.slice(-64);
+  let total = calculateMessagesTokens(await convertToModelMessages(candidate));
+  while (candidate.length > 0 && total > tokenBudget) {
+    candidate = candidate.slice(1);
+    total = calculateMessagesTokens(await convertToModelMessages(candidate));
+  }
+
+  return candidate;
 }
 
 async function finalizeMessageAndCredits({
@@ -914,6 +988,13 @@ async function finalizeMessageAndCredits({
           },
         },
       });
+
+      if (assistantMessage.metadata.branchId) {
+        await updateBranchHeadForMessage({
+          branchId: assistantMessage.metadata.branchId,
+          messageId: assistantMessage.id,
+        });
+      }
     }
 
     // Get total cost from accumulator (includes all LLM calls + external API costs)

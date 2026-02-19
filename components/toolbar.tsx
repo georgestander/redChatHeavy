@@ -162,7 +162,7 @@ function ReadingLevelSelector({
     "Graduate",
   ];
 
-  const { selectedModelId } = useChatInput();
+  const { activeBranchId, selectedModelId } = useChatInput();
 
   const y = useMotionValue(-40 * 2);
   const dragConstraints = 5 * 40 + 2;
@@ -224,6 +224,7 @@ function ReadingLevelSelector({
                     selectedModel: selectedModelId,
                     createdAt: new Date(),
                     parentMessageId: storeApi.getState().getLastMessageId(),
+                    branchId: activeBranchId ?? null,
                     activeStreamId: null,
                   },
                 });

@@ -6,6 +6,11 @@ import { getLanguageModel } from "@/lib/ai/providers";
 import type { ChatMessage } from "@/lib/ai/types";
 import { auth } from "@/lib/auth";
 import {
+  createBranchFromSelection,
+  ensureBranchingInitializedForChat,
+  renameBranch,
+} from "@/lib/branching/service";
+import {
   cloneAttachmentsInMessages,
   cloneMessagesWithDocuments,
 } from "@/lib/clone-messages";
@@ -26,12 +31,16 @@ import {
   updateChatVisiblityById,
   updateMessageCanceledAt,
 } from "@/lib/db/queries";
+import type { ChatBranch } from "@/lib/db/schema";
 import { dbChatToUIChat } from "@/lib/message-conversion";
 import {
+  chatCreateBranchInputSchema,
   chatGenerateTitleInputSchema,
   chatGetAllChatsInputSchema,
+  chatGetBranchesInputSchema,
   chatIdInputSchema,
   chatMessageIdInputSchema,
+  chatRenameBranchInputSchema,
   chatRenameInputSchema,
   chatSetIsPinnedInputSchema,
   chatSetVisibilityInputSchema,
@@ -62,6 +71,20 @@ function serializeMessage(message: ChatMessage) {
           ? message.metadata.createdAt.toISOString()
           : message.metadata.createdAt,
     },
+  };
+}
+
+function serializeBranch(branch: ChatBranch) {
+  return {
+    ...branch,
+    createdAt:
+      branch.createdAt instanceof Date
+        ? branch.createdAt.toISOString()
+        : branch.createdAt,
+    archivedAt:
+      branch.archivedAt instanceof Date
+        ? branch.archivedAt.toISOString()
+        : branch.archivedAt,
   };
 }
 
@@ -121,6 +144,7 @@ export async function getChatMessages(rawInput: unknown) {
     throw new Error("Chat not found");
   }
 
+  await ensureBranchingInitializedForChat({ chatId: input.chatId });
   const dbMessages = await getAllMessagesByChatId({ chatId: input.chatId });
   return dbMessages.map(serializeMessage);
 }
@@ -266,8 +290,77 @@ export async function getPublicChatMessages(rawInput: unknown) {
     throw new Error("Public chat not found");
   }
 
+  await ensureBranchingInitializedForChat({ chatId: input.chatId });
   const dbMessages = await getAllMessagesByChatId({ chatId: input.chatId });
   return dbMessages.map(serializeMessage);
+}
+
+export async function getChatBranches(rawInput: unknown) {
+  const input = chatGetBranchesInputSchema.parse(rawInput);
+  const userId = await requireUserId();
+
+  const chat = await getChatByIdQuery({ id: input.chatId });
+  if (!chat || chat.userId !== userId) {
+    throw new Error("Chat not found");
+  }
+
+  const { branches } = await ensureBranchingInitializedForChat({
+    chatId: input.chatId,
+  });
+  return branches.map(serializeBranch);
+}
+
+export async function getPublicChatBranches(rawInput: unknown) {
+  const input = chatGetBranchesInputSchema.parse(rawInput);
+  const chat = await getChatByIdQuery({ id: input.chatId });
+  if (!chat || chat.visibility !== "public") {
+    throw new Error("Public chat not found");
+  }
+
+  const { branches } = await ensureBranchingInitializedForChat({
+    chatId: input.chatId,
+  });
+  return branches.map(serializeBranch);
+}
+
+export async function createChatBranch(rawInput: unknown) {
+  const input = chatCreateBranchInputSchema.parse(rawInput);
+  const userId = await requireUserId();
+  const chat = await getChatByIdQuery({ id: input.chatId });
+
+  if (!chat || chat.userId !== userId) {
+    throw new Error("Chat not found or access denied");
+  }
+
+  const branch = await createBranchFromSelection({
+    chatId: input.chatId,
+    parentBranchId: input.parentBranchId ?? null,
+    messageId: input.messageId,
+    title: input.title ?? null,
+    excerpt: input.excerpt ?? null,
+    span: input.span ?? null,
+  });
+
+  return serializeBranch(branch);
+}
+
+export async function renameChatBranch(rawInput: unknown) {
+  const input = chatRenameBranchInputSchema.parse(rawInput);
+  const userId = await requireUserId();
+  const chat = await getChatByIdQuery({ id: input.chatId });
+
+  if (!chat || chat.userId !== userId) {
+    throw new Error("Chat not found or access denied");
+  }
+
+  const renamed = await renameBranch({
+    branchId: input.branchId,
+    title: input.title,
+  });
+  if (!renamed) {
+    throw new Error("Branch not found");
+  }
+  return serializeBranch(renamed);
 }
 
 export async function cloneSharedChat(rawInput: unknown) {
@@ -320,6 +413,9 @@ export async function cloneSharedChat(rawInput: unknown) {
       chatId: newChatId,
       message: msg,
     })),
+  });
+  await ensureBranchingInitializedForChat({
+    chatId: newChatId,
   });
   if (clonedDocuments.length > 0) {
     await saveDocuments({ documents: clonedDocuments });

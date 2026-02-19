@@ -55,6 +55,7 @@ function hydrateMessageDates(
     metadata: {
       createdAt: safeCreatedAt,
       activeStreamId: message.metadata?.activeStreamId ?? null,
+      branchId: message.metadata?.branchId ?? null,
       parentMessageId: message.metadata?.parentMessageId ?? null,
       selectedModel:
         message.metadata?.selectedModel ??

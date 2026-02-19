@@ -1,6 +1,7 @@
 "use client";
 import { Share } from "lucide-react";
 import { memo } from "react";
+import { ChatBranchControls } from "@/components/chat-branch-controls";
 import { HeaderActions } from "@/components/header-actions";
 import { HeaderBreadcrumb } from "@/components/header-breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -43,6 +44,8 @@ function PureChatHeader({
             user={user}
           />
         </div>
+
+        <ChatBranchControls isReadonly={isReadonly} />
 
         {!isReadonly && hasMessages && (
           <ShareButton chatId={chatId} className="hidden md:flex" />

@@ -3,28 +3,38 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { ChatSystem } from "@/components/chat-system";
 import {
+  useGetChatBranchesQueryOptions,
   useGetChatByIdQueryOptions,
   useGetChatMessagesQueryOptions,
 } from "@/hooks/chat-sync-hooks";
+import { useChatSystemInitialState } from "@/hooks/use-chat-system-initial-state";
+import { useSearchParams } from "@/hooks/use-navigation";
 import type { UiToolName } from "@/lib/ai/types";
-import { getDefaultThread } from "@/lib/thread-utils";
+import { resolveActiveBranchId } from "@/lib/branching/client-tree";
 import { useChatId } from "@/providers/chat-id-provider";
 
 export function ProjectChatPage({ projectId }: { projectId: string }) {
   const { id } = useChatId();
+  const searchParams = useSearchParams();
   const getChatByIdQueryOptions = useGetChatByIdQueryOptions(id);
   const { data: chat } = useSuspenseQuery(getChatByIdQueryOptions);
   const getMessagesByChatIdQueryOptions = useGetChatMessagesQueryOptions();
   const { data: messages } = useSuspenseQuery(getMessagesByChatIdQueryOptions);
+  const getChatBranchesQueryOptions = useGetChatBranchesQueryOptions();
+  const { data: branches } = useSuspenseQuery(getChatBranchesQueryOptions);
 
-  const initialThreadMessages = useMemo(() => {
-    if (!messages) {
-      return [];
+  const activeBranchId = useMemo(
+    () => resolveActiveBranchId(branches, searchParams.get("branch")),
+    [branches, searchParams]
+  );
+
+  const { initialMessages: initialThreadMessages } = useChatSystemInitialState(
+    messages,
+    {
+      activeBranchId,
+      branches,
     }
-    return getDefaultThread(
-      messages.map((msg) => ({ ...msg, id: msg.id.toString() }))
-    );
-  }, [messages]);
+  );
 
   const initialTool = useMemo<UiToolName | null>(() => {
     const lastAssistantMessage = messages?.findLast(
@@ -64,9 +74,12 @@ export function ProjectChatPage({ projectId }: { projectId: string }) {
   return (
     <ChatSystem
       id={chat.id}
+      activeBranchId={activeBranchId}
+      branches={branches}
       initialMessages={initialThreadMessages}
       initialTool={initialTool}
       isReadonly={false}
+      key={`${chat.id}:${activeBranchId ?? "root"}`}
       projectId={projectId}
     />
   );

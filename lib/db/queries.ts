@@ -414,6 +414,7 @@ export async function updateMessage({
           annotations: dbMessage.annotations,
           attachments: dbMessage.attachments,
           createdAt: dbMessage.createdAt,
+          branchId: dbMessage.branchId,
           parentMessageId: dbMessage.parentMessageId,
           lastContext: dbMessage.lastContext,
           activeStreamId: dbMessage.activeStreamId,
@@ -493,6 +494,7 @@ export async function getAllMessagesByChatId({
         metadata: {
           createdAt: msg.createdAt,
           activeStreamId: msg.activeStreamId,
+          branchId: msg.branchId,
           parentMessageId: msg.parentMessageId,
           selectedModel: (msg.selectedModel ||
             "") as ChatMessage["metadata"]["selectedModel"],
@@ -798,6 +800,7 @@ export async function getChatMessageWithPartsById({
         metadata: {
           createdAt: dbMessage.createdAt,
           activeStreamId: dbMessage.activeStreamId,
+          branchId: dbMessage.branchId,
           parentMessageId: dbMessage.parentMessageId,
           selectedModel: (dbMessage.selectedModel ||
             "") as ChatMessage["metadata"]["selectedModel"],

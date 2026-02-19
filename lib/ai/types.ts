@@ -59,6 +59,7 @@ export type UiToolName = z.infer<typeof frontendToolsSchema>;
 const messageMetadataSchema = z.object({
   createdAt: z.date(),
   parentMessageId: z.string().nullable(),
+  branchId: z.string().nullable().optional(),
   selectedModel: z.custom<AppModelId>((val) => typeof val === "string"),
   activeStreamId: z.string().nullable(),
   selectedTool: frontendToolsSchema.optional(),

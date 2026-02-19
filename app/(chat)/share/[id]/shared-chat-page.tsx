@@ -2,29 +2,42 @@
 import { useMemo } from "react";
 import { ChatSystem } from "@/components/chat-system";
 import { WithSkeleton } from "@/components/with-skeleton";
-import { usePublicChat, usePublicChatMessages } from "@/hooks/use-shared-chat";
-import { getDefaultThread } from "@/lib/thread-utils";
+import { useChatSystemInitialState } from "@/hooks/use-chat-system-initial-state";
+import { useSearchParams } from "@/hooks/use-navigation";
+import {
+  usePublicChat,
+  usePublicChatBranches,
+  usePublicChatMessages,
+} from "@/hooks/use-shared-chat";
+import { resolveActiveBranchId } from "@/lib/branching/client-tree";
 
 export function SharedChatPage({ id }: { id: string }) {
+  const searchParams = useSearchParams();
   const {
     data: chat,
     isLoading: isChatLoading,
     error: chatError,
   } = usePublicChat(id);
   const {
+    data: branches,
+    isLoading: isBranchesLoading,
+    error: branchesError,
+  } = usePublicChatBranches(id);
+  const {
     data: messages,
     isLoading: isMessagesLoading,
     error: messagesError,
   } = usePublicChatMessages(id);
 
-  const initialThreadMessages = useMemo(() => {
-    if (!messages) {
-      return [];
-    }
-    return getDefaultThread(
-      messages.map((msg) => ({ ...msg, id: msg.id.toString() }))
-    );
-  }, [messages]);
+  const activeBranchId = useMemo(
+    () => resolveActiveBranchId(branches ?? [], searchParams.get("branch")),
+    [branches, searchParams]
+  );
+
+  const { initialMessages } = useChatSystemInitialState(messages, {
+    activeBranchId,
+    branches: branches ?? [],
+  });
 
   if (!id) {
     return (
@@ -34,7 +47,7 @@ export function SharedChatPage({ id }: { id: string }) {
     );
   }
 
-  if (chatError || messagesError) {
+  if (chatError || branchesError || messagesError) {
     // TODO: Replace for error page
     return (
       <div className="flex h-dvh items-center justify-center">
@@ -53,11 +66,11 @@ export function SharedChatPage({ id }: { id: string }) {
     );
   }
 
-  if (isMessagesLoading || isChatLoading) {
+  if (isMessagesLoading || isBranchesLoading || isChatLoading) {
     return (
       <WithSkeleton
         className="h-full w-full"
-        isLoading={isChatLoading || isMessagesLoading}
+        isLoading={isChatLoading || isMessagesLoading || isBranchesLoading}
       >
         <div className="flex h-dvh w-full" />
       </WithSkeleton>
@@ -75,12 +88,15 @@ export function SharedChatPage({ id }: { id: string }) {
   return (
     <WithSkeleton
       className="w-full"
-      isLoading={isChatLoading || isMessagesLoading}
+      isLoading={isChatLoading || isMessagesLoading || isBranchesLoading}
     >
       <ChatSystem
+        activeBranchId={activeBranchId}
+        branches={branches ?? []}
         id={chat.id}
-        initialMessages={initialThreadMessages}
+        initialMessages={initialMessages}
         isReadonly={true}
+        key={`${chat.id}:${activeBranchId ?? "root"}:readonly`}
       />
     </WithSkeleton>
   );
