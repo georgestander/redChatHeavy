@@ -1,9 +1,11 @@
 "use client";
 
 import { ChevronDown, ExternalLink, Globe, TextIcon } from "lucide-react";
+import type { ComponentProps } from "react";
 import ReactMarkdown from "react-markdown";
 import Image from "@/components/image";
 import type { ChatMessage } from "@/lib/ai/types";
+import { sanitizeUrl } from "@/lib/markdown";
 
 export type RetrieveUrlTool = Extract<
   ChatMessage["parts"][number],
@@ -71,6 +73,7 @@ function RetrievedContentHeader({ firstItem }: { firstItem: unknown }) {
     "No description available"
   );
   const language = getItemProperty(firstItem, "language", "Unknown");
+  const safeUrl = sanitizeUrl(url) ?? "#";
 
   return (
     <div className="p-4">
@@ -98,7 +101,7 @@ function RetrievedContentHeader({ firstItem }: { firstItem: unknown }) {
             </span>
             <a
               className="inline-flex items-center gap-1.5 text-neutral-500 text-xs transition-colors hover:text-primary"
-              href={url || "#"}
+              href={safeUrl}
               rel="noopener noreferrer"
               target="_blank"
             >
@@ -114,6 +117,31 @@ function RetrievedContentHeader({ firstItem }: { firstItem: unknown }) {
 
 function RetrievedContentDetails({ firstItem }: { firstItem: unknown }) {
   const content = getItemProperty(firstItem, "content", "No content available");
+  const components: NonNullable<
+    ComponentProps<typeof ReactMarkdown>["components"]
+  > = {
+    a: ({ href, rel, target, ...rest }) => {
+      const safeHref = sanitizeUrl(href);
+      if (!safeHref) {
+        return <span>{rest.children}</span>;
+      }
+
+      const safeRel =
+        target === "_blank"
+          ? [rel, "noopener", "noreferrer"].filter(Boolean).join(" ")
+          : rel;
+
+      return <a href={safeHref} rel={safeRel} target={target} {...rest} />;
+    },
+    img: ({ src, alt, ...rest }) => {
+      const safeSrc = sanitizeUrl(src, { allowDataImages: false });
+      if (!safeSrc) {
+        return null;
+      }
+
+      return <img alt={alt} src={safeSrc} {...rest} />;
+    },
+  };
 
   return (
     <div className="border-neutral-200 border-t dark:border-neutral-800">
@@ -127,7 +155,7 @@ function RetrievedContentDetails({ firstItem }: { firstItem: unknown }) {
         </summary>
         <div className="max-h-[50vh] overflow-y-auto bg-neutral-50/50 p-4 dark:bg-neutral-800/30">
           <div className="prose prose-neutral dark:prose-invert prose-sm max-w-none">
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <ReactMarkdown components={components}>{content}</ReactMarkdown>
           </div>
         </div>
       </details>
