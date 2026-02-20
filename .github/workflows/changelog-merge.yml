@@ -1,0 +1,132 @@
+name: Changelog Merge Update
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  changelog-merge-update:
+    name: Changelog Merge Update
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Collect merged PR changelog entries
+        id: collect
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const before = context.payload.before;
+            const after = context.payload.after || context.sha;
+
+            if (!before || /^0+$/.test(before)) {
+              core.info("No previous SHA available for compare. Skipping.");
+              core.setOutput("entries", "[]");
+              return;
+            }
+
+            function extractChangelogBullets(body) {
+              if (!body) return [];
+
+              const sectionMatch = body.match(
+                /(?:^|\n)##\s+Changelog[^\n]*\n([\s\S]*?)(?=\n##\s+\S|\n#\s+\S|$)/i,
+              );
+
+              if (!sectionMatch) return [];
+
+              return sectionMatch[1]
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .filter((line) => !/^<!--/.test(line))
+                .flatMap((line) => {
+                  const bullet = line.match(/^[-*+]\s+(.+)$/);
+                  if (bullet) return [bullet[1].trim()];
+
+                  const ordered = line.match(/^\d+\.\s+(.+)$/);
+                  if (ordered) return [ordered[1].trim()];
+
+                  return [];
+                })
+                .filter((item) => {
+                  const lowered = item.toLowerCase();
+                  return lowered !== "-" && lowered !== "n/a" && lowered !== "none";
+                });
+            }
+
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${before}...${after}`,
+            });
+
+            const seenPrs = new Set();
+            const entries = [];
+
+            for (const commit of comparison.commits || []) {
+              const { data: prs } = await github.request(
+                "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: commit.sha,
+                  mediaType: { previews: ["groot"] },
+                },
+              );
+
+              for (const pr of prs) {
+                if (seenPrs.has(pr.number)) continue;
+                seenPrs.add(pr.number);
+
+                if (!pr.merged_at) continue;
+                if (pr.base?.ref !== "main") continue;
+
+                const labels = (pr.labels || []).map((label) =>
+                  String(label.name).toLowerCase(),
+                );
+                if (labels.includes("skip-changelog")) continue;
+
+                const bullets = extractChangelogBullets(pr.body || "");
+                if (bullets.length === 0) continue;
+
+                entries.push({
+                  number: pr.number,
+                  title: pr.title,
+                  url: pr.html_url,
+                  mergedAt: pr.merged_at,
+                  bullets,
+                });
+              }
+            }
+
+            core.info(`Collected ${entries.length} changelog entries from merged PRs.`);
+            core.setOutput("entries", JSON.stringify(entries));
+
+      - name: Update changelog file
+        if: steps.collect.outputs.entries != '[]'
+        run: node scripts/update-changelog-from-prs.mjs
+        env:
+          CHANGELOG_FILE: docs/changelog.mdx
+          CHANGELOG_ENTRIES_JSON: ${{ steps.collect.outputs.entries }}
+
+      - name: Commit and push changelog update
+        if: steps.collect.outputs.entries != '[]'
+        run: |
+          if git diff --quiet -- docs/changelog.mdx; then
+            echo "No changelog content changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/changelog.mdx
+          git commit -m "docs: update changelog from merged pull requests [skip ci]"
+          git push
