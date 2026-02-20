@@ -1,0 +1,132 @@
+name: Changelog Preview
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+      - labeled
+      - unlabeled
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  changelog-preview:
+    name: Changelog Preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate changelog section and post preview
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const labels = (pr.labels || []).map((label) => String(label.name).toLowerCase());
+            const skipped = labels.includes("skip-changelog");
+
+            function extractChangelogBullets(body) {
+              if (!body) return [];
+
+              const sectionMatch = body.match(
+                /(?:^|\n)##\s+Changelog[^\n]*\n([\s\S]*?)(?=\n##\s+\S|\n#\s+\S|$)/i,
+              );
+
+              if (!sectionMatch) return [];
+
+              const section = sectionMatch[1]
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .filter((line) => !/^<!--/.test(line));
+
+              const bullets = [];
+
+              for (const line of section) {
+                const bulletMatch = line.match(/^[-*+]\s+(.+)$/);
+                if (bulletMatch) {
+                  bullets.push(bulletMatch[1].trim());
+                  continue;
+                }
+
+                const orderedMatch = line.match(/^\d+\.\s+(.+)$/);
+                if (orderedMatch) {
+                  bullets.push(orderedMatch[1].trim());
+                }
+              }
+
+              return bullets.filter((item) => {
+                const lowered = item.toLowerCase();
+                return lowered !== "-" && lowered !== "n/a" && lowered !== "none";
+              });
+            }
+
+            const bullets = extractChangelogBullets(pr.body || "");
+            const valid = skipped || bullets.length > 0;
+            const marker = "<!-- changelog-preview-comment -->";
+
+            const header = `${marker}
+            ## Changelog Preview`;
+
+            let statusBlock = "";
+            if (skipped) {
+              statusBlock =
+                "This PR is marked with `skip-changelog`, so no changelog entry will be generated.";
+            } else if (bullets.length > 0) {
+              statusBlock = [
+                "This PR contributes the following changelog bullets:",
+                "",
+                ...bullets.map((bullet) => `- ${bullet}`),
+              ].join("\n");
+            } else {
+              statusBlock = [
+                "No valid changelog bullets were found under `## Changelog`.",
+                "",
+                "Add at least one bullet in the PR body, or apply the `skip-changelog` label.",
+              ].join("\n");
+            }
+
+            const previewBody = `${header}
+
+            ${statusBlock}
+
+            _Checked on ${new Date().toISOString()}_`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(
+              (comment) =>
+                comment.user?.type === "Bot" && comment.body?.includes(marker),
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: previewBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: previewBody,
+              });
+            }
+
+            if (!valid) {
+              core.setFailed(
+                'Missing changelog bullets. Add at least one bullet under "## Changelog" in the PR body, or add the "skip-changelog" label.',
+              );
+            }
