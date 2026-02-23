@@ -20,8 +20,7 @@ import { useSession } from "@/providers/session-provider";
 import { Button } from "./ui/button";
 
 type SelectionState = {
-  start: number;
-  end: number;
+  span: { start: number; end: number } | null;
   text: string;
   rect: DOMRect;
 };
@@ -59,6 +58,7 @@ export function AssistantBranchSelection({
 
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const selectionRafRef = useRef<number | null>(null);
 
   const clearSelection = useCallback(() => {
     setSelection(null);
@@ -103,24 +103,53 @@ export function AssistantBranchSelection({
       return;
     }
 
-    const span = computeSelectionOffsets(root, range, {
-      includeTextNode: (node) =>
-        Boolean(node.parentElement?.closest('[data-branchable-text="true"]')),
-    });
-
     const text = selected.toString().trim();
-    if (!span || !text || span.start >= span.end) {
+    if (!text) {
       setSelection(null);
       return;
     }
 
-    const rect = range.getBoundingClientRect();
+    const computedSpan = computeSelectionOffsets(root, range, {
+      includeTextNode: (node) =>
+        Boolean(node.parentElement?.closest('[data-branchable-text="true"]')),
+    });
+    const span =
+      computedSpan && computedSpan.start < computedSpan.end
+        ? computedSpan
+        : null;
+
+    const primaryRect = range.getBoundingClientRect();
+    const fallbackRect = range.getClientRects().item(0);
+    const rect =
+      (primaryRect.width > 0 || primaryRect.height > 0
+        ? primaryRect
+        : fallbackRect) ?? null;
+    if (!rect) {
+      setSelection(null);
+      return;
+    }
+
     setSelection({
-      ...span,
+      span,
       text,
       rect,
     });
   }, [isReadonly]);
+
+  const scheduleSelectionCheck = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (selectionRafRef.current !== null) {
+      window.cancelAnimationFrame(selectionRafRef.current);
+    }
+
+    selectionRafRef.current = window.requestAnimationFrame(() => {
+      selectionRafRef.current = null;
+      handleSelection();
+    });
+  }, [handleSelection]);
 
   const createSelectionBranch = useCallback(async () => {
     if (!selection) {
@@ -163,10 +192,7 @@ export function AssistantBranchSelection({
         messageId,
         parentBranchId: activeBranchId ?? null,
         excerpt: branchExcerpt,
-        span: {
-          start: selection.start,
-          end: selection.end,
-        },
+        span: selection.span ?? null,
       });
 
       if (createdBranch?.id) {
@@ -208,16 +234,26 @@ export function AssistantBranchSelection({
       setSelection(null);
     };
 
+    const handleSelectionChange = () => {
+      scheduleSelectionCheck();
+    };
+
     window.addEventListener("keydown", handleEscape);
     window.addEventListener("resize", clearOnViewportChange);
     window.addEventListener("scroll", clearOnViewportChange, true);
+    document.addEventListener("selectionchange", handleSelectionChange);
 
     return () => {
       window.removeEventListener("keydown", handleEscape);
       window.removeEventListener("resize", clearOnViewportChange);
       window.removeEventListener("scroll", clearOnViewportChange, true);
+      document.removeEventListener("selectionchange", handleSelectionChange);
+      if (selectionRafRef.current !== null) {
+        window.cancelAnimationFrame(selectionRafRef.current);
+        selectionRafRef.current = null;
+      }
     };
-  }, [clearSelection]);
+  }, [clearSelection, scheduleSelectionCheck]);
 
   const popoverStyle = useMemo(() => {
     if (!selection) {
@@ -236,8 +272,8 @@ export function AssistantBranchSelection({
   return (
     <div
       className={cn("relative", className)}
-      onKeyUp={handleSelection}
-      onMouseUp={handleSelection}
+      onKeyUp={scheduleSelectionCheck}
+      onMouseUp={scheduleSelectionCheck}
       ref={containerRef}
     >
       {children}
