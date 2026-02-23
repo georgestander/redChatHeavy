@@ -38,15 +38,8 @@ async function createLocalNodePgDbClient(): Promise<DbClient> {
       idleTimeoutMillis?: number;
       keepAlive?: boolean;
       max?: number;
-      query_timeout?: number;
-      statement_timeout?: number;
     }) => {
       on: (event: "error", listener: (error: unknown) => void) => void;
-      connect: () => Promise<{
-        query: (...args: unknown[]) => Promise<unknown>;
-        release: (destroy?: boolean) => void;
-      }>;
-      query: (...args: unknown[]) => Promise<unknown>;
     };
   };
   const { drizzle } = (await import("drizzle-orm/node-postgres")) as {
@@ -56,68 +49,19 @@ async function createLocalNodePgDbClient(): Promise<DbClient> {
     ) => unknown;
   };
 
-  // Workers + local TCP Postgres is sensitive to connection churn.
-  // Keep one persistent socket and fail fast instead of hanging forever.
+  // Keep conservative local defaults and avoid client-side query read timeouts.
+  // Query timeouts in this runtime can fire under transient local load and
+  // incorrectly surface as auth/session failures.
   const pool = new Pool({
     connectionString: env.DATABASE_URL,
-    max: 5,
+    max: 20,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 10_000,
     keepAlive: true,
-    statement_timeout: 15_000,
-    query_timeout: 12_000,
   });
   pool.on("error", (error) => {
     console.error("[db:local-pg] pool error", error);
   });
-
-  const shouldRetryLocalQuery = (error: unknown): boolean => {
-    const message =
-      error instanceof Error
-        ? error.message
-        : typeof error === "string"
-          ? error
-          : "";
-    return (
-      message.includes("Query read timeout") ||
-      message.includes("Connection terminated unexpectedly") ||
-      message.includes("Client has encountered a connection error")
-    );
-  };
-
-  const queryWithRetry = async (...args: unknown[]): Promise<unknown> => {
-    const maxAttempts = 3;
-    let attempt = 0;
-
-    while (true) {
-      const client = await pool.connect();
-      let released = false;
-      try {
-        return await client.query(...args);
-      } catch (error) {
-        client.release(true);
-        released = true;
-
-        if (shouldRetryLocalQuery(error) && attempt < maxAttempts - 1) {
-          attempt += 1;
-          console.warn(
-            `[db:local-pg] retrying query after transient error (attempt ${attempt + 1}/${maxAttempts})`,
-            error
-          );
-          await new Promise((resolve) => setTimeout(resolve, attempt * 75));
-          continue;
-        }
-
-        throw error;
-      } finally {
-        if (!released) {
-          client.release();
-        }
-      }
-    }
-  };
-
-  pool.query = queryWithRetry;
   return drizzle(pool, { schema }) as DbClient;
 }
 

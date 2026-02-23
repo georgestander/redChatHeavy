@@ -27,7 +27,6 @@ import TermsPage from "@/app/pages/terms";
 import { StreamBufferDO as StreamBufferDOClass } from "@/durable-objects/stream-buffer-do";
 import {
   auth,
-  getDevLocalSessionFromHeaders,
   getServerSession,
   isDevLocalAuthRuntime,
 } from "@/lib/auth";
@@ -665,20 +664,17 @@ export default defineApp<AppRequestInfo>([
     if (request.method === "GET") {
       const { pathname } = new URL(request.url);
       if (isAuthSessionRoute(pathname)) {
-        const devSession = getDevLocalSessionFromHeaders(request.headers);
-        if (devSession) {
-          return Response.json(devSession);
-        }
-        if (isDevLocalAuthRuntime()) {
-          try {
-            return await auth.handler(request);
-          } catch (error) {
+        try {
+          return Response.json(await getServerSession(request.headers));
+        } catch (error) {
+          if (isDevLocalAuthRuntime()) {
             console.warn(
               "[auth] session route failed in local runtime; returning null session",
               error
             );
             return Response.json(null);
           }
+          throw error;
         }
       }
     }
