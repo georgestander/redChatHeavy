@@ -23,11 +23,11 @@ import {
   flattenChatBranchTree,
   resolveActiveBranchId,
 } from "@/lib/branching/client-tree";
-import { cn } from "@/lib/utils";
-import { chatKeys } from "@/lib/query-keys";
 import type { ChatBranch } from "@/lib/db/schema";
-import { getChatBranches } from "@/server/actions/chat";
+import { chatKeys } from "@/lib/query-keys";
 import type { UIChat } from "@/lib/types/ui-chat";
+import { cn } from "@/lib/utils";
+import { getChatBranches } from "@/server/actions/chat";
 
 const PureSidebarChatItem = ({
   chat,
@@ -95,7 +95,11 @@ const PureSidebarChatItem = ({
     () => flattenChatBranchTree(branchTree),
     [branchTree]
   );
-  const hasChildBranches = flattenedTree.some((node) => node.depth > 0);
+  const childBranchNodes = useMemo(
+    () => flattenedTree.filter((node) => node.depth > 0),
+    [flattenedTree]
+  );
+  const hasChildBranches = childBranchNodes.length > 0;
   const resolvedActiveBranchId = useMemo(
     () => resolveActiveBranchId(branchQuery.data ?? [], activeBranchId),
     [activeBranchId, branchQuery.data]
@@ -230,8 +234,9 @@ const PureSidebarChatItem = ({
 
           {isBranchTreeOpen ? (
             <div className="mt-1 border-sidebar-border/60 border-l pl-2">
-              {flattenedTree.map((node) => {
+              {childBranchNodes.map((node) => {
                 const isActiveBranch = node.branch.id === resolvedActiveBranchId;
+                const relativeDepth = Math.max(node.depth - 1, 0);
 
                 return (
                   <button
@@ -242,7 +247,7 @@ const PureSidebarChatItem = ({
                     )}
                     key={node.branch.id}
                     onClick={() => navigateToBranch(node.branch.id)}
-                    style={{ paddingLeft: `${node.depth * 10 + 6}px` }}
+                    style={{ paddingLeft: `${relativeDepth * 10 + 6}px` }}
                     type="button"
                   >
                     <span className="truncate">{node.branch.title}</span>
