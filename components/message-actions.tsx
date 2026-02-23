@@ -10,20 +10,13 @@ import {
 import { useCreateChatBranch } from "@/hooks/chat-sync-hooks";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ChatMessage } from "@/lib/ai/types";
+import { getTextContentFromMessage } from "@/lib/branching/message-text";
 import { useMessageRoleById } from "@/lib/stores/hooks-base";
 import { useBranchState } from "@/providers/branch-state-provider";
 import { useSession } from "@/providers/session-provider";
 import { useChatVotes } from "./chat/use-chat-votes";
 import { FeedbackActions } from "./feedback-actions";
 import { MessageSiblings } from "./message-siblings";
-
-function getTextContentFromMessage(message: ChatMessage): string {
-  return message.parts
-    ?.filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("\n")
-    .trim();
-}
 
 function getSelectionSpan(textContent: string): {
   span: { start: number; end: number } | null;
@@ -71,7 +64,7 @@ function PureMessageActions({
   const role = useMessageRoleById(messageId);
   const { mutateAsync: createBranch, isPending: isCreatingBranch } =
     useCreateChatBranch();
-  const { activeBranchId, setActiveBranchId, setCompareMode } =
+  const { activeBranchId, setActiveBranchId, setCompareMode, setCompareSheetOpen } =
     useBranchState();
   const { data: session } = useSession();
   const isAuthenticated = Boolean(session?.user);
@@ -165,8 +158,7 @@ function PureMessageActions({
             try {
               const createdBranch = await createBranch({
                 messageId,
-                parentBranchId:
-                  message.metadata?.branchId ?? activeBranchId ?? null,
+                parentBranchId: activeBranchId ?? null,
                 excerpt: branchExcerpt,
                 span,
               });
@@ -175,6 +167,7 @@ function PureMessageActions({
                 setActiveBranchId(createdBranch.id, { history: "push" });
                 if (branchExcerpt) {
                   setCompareMode(true, { history: "replace" });
+                  setCompareSheetOpen(true);
                 }
               }
 

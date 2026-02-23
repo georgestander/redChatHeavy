@@ -5,7 +5,9 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useState,
 } from "react";
 import { updateSearchParams, useSearchParams } from "@/hooks/use-navigation";
 import {
@@ -25,6 +27,7 @@ type BranchStateContextType = {
   activeBranchId: string | null;
   activeBranch: ChatBranch | null;
   compareMode: boolean;
+  compareSheetOpen: boolean;
   setActiveBranchId: (
     branchId: string,
     options?: { history?: BranchHistoryMode }
@@ -33,6 +36,7 @@ type BranchStateContextType = {
     enabled: boolean,
     options?: { history?: BranchHistoryMode }
   ) => void;
+  setCompareSheetOpen: (open: boolean) => void;
 };
 
 const BranchStateContext = createContext<BranchStateContextType | undefined>(
@@ -49,6 +53,7 @@ export function BranchStateProvider({
   activeBranchId?: string | null;
 }) {
   const searchParams = useSearchParams();
+  const [compareSheetOpen, setCompareSheetOpen] = useState(false);
 
   const resolvedActiveBranchId = useMemo(
     () => resolveActiveBranchId(branches, activeBranchId ?? null),
@@ -62,6 +67,12 @@ export function BranchStateProvider({
   );
 
   const compareMode = searchParams.get("compare") === "1";
+
+  useEffect(() => {
+    if (!compareMode) {
+      setCompareSheetOpen(false);
+    }
+  }, [compareMode]);
 
   const setActiveBranchId = useCallback(
     (branchId: string, options?: { history?: BranchHistoryMode }) => {
@@ -98,8 +109,10 @@ export function BranchStateProvider({
       activeBranchId: resolvedActiveBranchId,
       activeBranch,
       compareMode,
+      compareSheetOpen,
       setActiveBranchId,
       setCompareMode,
+      setCompareSheetOpen,
     }),
     [
       branches,
@@ -108,8 +121,10 @@ export function BranchStateProvider({
       resolvedActiveBranchId,
       activeBranch,
       compareMode,
+      compareSheetOpen,
       setActiveBranchId,
       setCompareMode,
+      setCompareSheetOpen,
     ]
   );
 
