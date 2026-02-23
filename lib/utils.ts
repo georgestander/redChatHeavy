@@ -24,8 +24,24 @@ export async function fetchWithErrorHandlers(
     const response = await fetch(input, init);
 
     if (!response.ok) {
-      const { code, cause } = await response.json();
-      throw new ChatSDKError(code as ErrorCode, cause);
+      const contentType = response.headers.get('content-type') ?? '';
+
+      if (contentType.includes('application/json')) {
+        const payload = (await response.json().catch(() => null)) as
+          | { code?: string; cause?: string; error?: string }
+          | null;
+
+        if (payload?.code) {
+          throw new ChatSDKError(payload.code as ErrorCode, payload.cause);
+        }
+
+        throw new Error(
+          payload?.error || `Request failed with status ${response.status}`,
+        );
+      }
+
+      const responseText = await response.text();
+      throw new Error(responseText || `Request failed with status ${response.status}`);
     }
 
     return response;

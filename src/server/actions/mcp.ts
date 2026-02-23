@@ -11,7 +11,7 @@ import {
 } from "@/lib/ai/mcp/cache";
 import { getOrCreateMcpClient, removeMcpClient } from "@/lib/ai/mcp/mcp-client";
 import { generateMcpNameId } from "@/lib/ai/mcp-name-id";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import { config } from "@/lib/config";
 import {
   createMcpConnector,
@@ -49,9 +49,7 @@ function assertMcpEnabled() {
 }
 
 async function requireUser() {
-  const session = await auth.api.getSession({
-    headers: requestInfo.request.headers,
-  });
+  const session = await getServerSession(requestInfo.request.headers);
 
   if (!session?.user) {
     throw new Error("UNAUTHORIZED");

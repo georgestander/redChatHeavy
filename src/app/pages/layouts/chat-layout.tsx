@@ -59,18 +59,19 @@ export async function ChatLayout({
   const isAnonymous = !session?.user;
 
   const chatModels = await getChatModels();
+  const fallbackModel = (chatModels[0]?.id ?? DEFAULT_CHAT_MODEL) as AppModelId;
 
-  let defaultModel = cookieModel ?? DEFAULT_CHAT_MODEL;
+  let defaultModel = cookieModel ?? fallbackModel;
   if (cookieModel) {
     const modelExists = chatModels.some((model) => model.id === cookieModel);
     if (!modelExists) {
-      defaultModel = DEFAULT_CHAT_MODEL;
+      defaultModel = fallbackModel;
     } else if (isAnonymous) {
       const isModelAvailable = ANONYMOUS_LIMITS.AVAILABLE_MODELS.includes(
         cookieModel as (typeof ANONYMOUS_LIMITS.AVAILABLE_MODELS)[number]
       );
       if (!isModelAvailable) {
-        defaultModel = DEFAULT_CHAT_MODEL;
+        defaultModel = fallbackModel;
       }
     }
   }

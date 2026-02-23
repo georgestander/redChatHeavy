@@ -1,6 +1,11 @@
 import { serializeCookie, serializeSignedCookie } from "better-call";
 import { eq } from "drizzle-orm";
-import { DEV_LOCAL_USER_COOKIE_NAME, isDevLocalAuthRuntime } from "@/lib/auth";
+import {
+  DEV_LOCAL_DEFAULT_USER_ID,
+  DEV_LOCAL_EMAIL,
+  DEV_LOCAL_USER_COOKIE_NAME,
+  isDevLocalAuthRuntime,
+} from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { session, user } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -49,20 +54,30 @@ export async function handleDevLoginRequest(request?: Request) {
   }
 
   try {
-    const devEmail = "dev@localhost";
-    let [devUser] = await db.select().from(user).where(eq(user.email, devEmail));
+    let [devUser] = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, DEV_LOCAL_DEFAULT_USER_ID));
 
     if (!devUser) {
-      const id = crypto.randomUUID();
-      [devUser] = await db
+      await db
         .insert(user)
         .values({
-          id,
-          email: devEmail,
+          id: DEV_LOCAL_DEFAULT_USER_ID,
+          email: DEV_LOCAL_EMAIL,
           name: "Dev User",
           emailVerified: true,
         })
-        .returning();
+        .onConflictDoNothing();
+
+      [devUser] = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, DEV_LOCAL_DEFAULT_USER_ID));
+
+      if (!devUser) {
+        throw new Error("Unable to create local dev user");
+      }
     }
 
     const token = crypto.randomUUID();

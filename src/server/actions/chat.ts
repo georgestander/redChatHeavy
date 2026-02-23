@@ -4,7 +4,7 @@ import { generateText } from "ai";
 import { requestInfo } from "rwsdk/worker";
 import { getLanguageModel } from "@/lib/ai/providers";
 import type { ChatMessage } from "@/lib/ai/types";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import {
   createBranchFromSelection,
   ensureBranchingInitializedForChat,
@@ -89,9 +89,7 @@ function serializeBranch(branch: ChatBranch) {
 }
 
 async function requireUserId() {
-  const session = await auth.api.getSession({
-    headers: requestInfo.request.headers,
-  });
+  const session = await getServerSession(requestInfo.request.headers);
   const userId = session?.user?.id;
   if (!userId) {
     throw new Error("UNAUTHORIZED");
@@ -100,53 +98,68 @@ async function requireUserId() {
 }
 
 export async function getAllChats(rawInput?: unknown) {
-  const input = chatGetAllChatsInputSchema.parse(rawInput);
-  const userId = await requireUserId();
+  try {
+    const input = chatGetAllChatsInputSchema.parse(rawInput);
+    const userId = await requireUserId();
 
-  const chats = await getChatsByUserId({
-    id: userId,
-    projectId: input?.projectId,
-  });
+    const chats = await getChatsByUserId({
+      id: userId,
+      projectId: input?.projectId,
+    });
 
-  // Sort chats by pinned status, then by last updated date
-  chats.sort((a, b) => {
-    if (a.isPinned && !b.isPinned) {
-      return -1;
-    }
-    if (!a.isPinned && b.isPinned) {
-      return 1;
-    }
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-  });
+    // Sort chats by pinned status, then by last updated date
+    chats.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) {
+        return -1;
+      }
+      if (!a.isPinned && b.isPinned) {
+        return 1;
+      }
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
 
-  return chats.map((chat) => serializeChat(dbChatToUIChat(chat)));
+    return chats.map((chat) => serializeChat(dbChatToUIChat(chat)));
+  } catch (error) {
+    console.error("Failed to load chats", error);
+    return [];
+  }
 }
 
 export async function getChatById(rawInput: unknown) {
-  const input = chatIdInputSchema.parse(rawInput);
-  const userId = await requireUserId();
+  try {
+    const input = chatIdInputSchema.parse(rawInput);
+    const userId = await requireUserId();
 
-  const chat = await getChatByIdQuery({ id: input.chatId });
+    const chat = await getChatByIdQuery({ id: input.chatId });
 
-  if (!chat || chat.userId !== userId) {
-    throw new Error("Chat not found");
+    if (!chat || chat.userId !== userId) {
+      return null;
+    }
+
+    return serializeChat(dbChatToUIChat(chat));
+  } catch (error) {
+    console.error("Failed to load chat by id", error);
+    return null;
   }
-
-  return serializeChat(dbChatToUIChat(chat));
 }
 
 export async function getChatMessages(rawInput: unknown) {
-  const input = chatIdInputSchema.parse(rawInput);
-  const userId = await requireUserId();
+  try {
+    const input = chatIdInputSchema.parse(rawInput);
+    const userId = await requireUserId();
 
-  const chat = await getChatByIdQuery({ id: input.chatId });
-  if (!chat || chat.userId !== userId) {
-    throw new Error("Chat not found");
+    const chat = await getChatByIdQuery({ id: input.chatId });
+    if (!chat || chat.userId !== userId) {
+      return [];
+    }
+
+    await ensureBranchingInitializedForChat({ chatId: input.chatId });
+    const dbMessages = await getAllMessagesByChatId({ chatId: input.chatId });
+    return dbMessages.map(serializeMessage);
+  } catch (error) {
+    console.error("Failed to load chat messages", error);
+    return [];
   }
-
-  await ensureBranchingInitializedForChat({ chatId: input.chatId });
-  const dbMessages = await getAllMessagesByChatId({ chatId: input.chatId });
-  return dbMessages.map(serializeMessage);
 }
 
 export async function renameChat(rawInput: unknown) {
@@ -296,18 +309,23 @@ export async function getPublicChatMessages(rawInput: unknown) {
 }
 
 export async function getChatBranches(rawInput: unknown) {
-  const input = chatGetBranchesInputSchema.parse(rawInput);
-  const userId = await requireUserId();
+  try {
+    const input = chatGetBranchesInputSchema.parse(rawInput);
+    const userId = await requireUserId();
 
-  const chat = await getChatByIdQuery({ id: input.chatId });
-  if (!chat || chat.userId !== userId) {
-    throw new Error("Chat not found");
+    const chat = await getChatByIdQuery({ id: input.chatId });
+    if (!chat || chat.userId !== userId) {
+      return [];
+    }
+
+    const { branches } = await ensureBranchingInitializedForChat({
+      chatId: input.chatId,
+    });
+    return branches.map(serializeBranch);
+  } catch (error) {
+    console.error("Failed to load chat branches", error);
+    return [];
   }
-
-  const { branches } = await ensureBranchingInitializedForChat({
-    chatId: input.chatId,
-  });
-  return branches.map(serializeBranch);
 }
 
 export async function getPublicChatBranches(rawInput: unknown) {

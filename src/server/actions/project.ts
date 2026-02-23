@@ -1,7 +1,7 @@
 "use server";
 
 import { requestInfo } from "rwsdk/worker";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import {
   createProject,
   deleteProject,
@@ -35,9 +35,7 @@ function serializeProject(project: ProjectRecord) {
 }
 
 async function requireUserId() {
-  const session = await auth.api.getSession({
-    headers: requestInfo.request.headers,
-  });
+  const session = await getServerSession(requestInfo.request.headers);
   const userId = session?.user?.id;
   if (!userId) {
     throw new Error("UNAUTHORIZED");

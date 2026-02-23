@@ -17,7 +17,15 @@ export function useChatVotes(
 
   return useQuery({
     queryKey: voteKeys.byChatId(chatId),
-    queryFn: () => getVotes({ chatId }),
+    queryFn: async () => {
+      try {
+        return await getVotes({ chatId });
+      } catch (error) {
+        console.error("Failed to load chat votes", error);
+        return [];
+      }
+    },
+    initialData: [],
     enabled:
       messageIds.length >= 2 && !isReadonly && !!session?.user && !isLoading,
   });

@@ -34,10 +34,10 @@ function validateSandbox(env: NodeJS.ProcessEnv): ValidationError | null {
 function validateIntegrations(env: NodeJS.ProcessEnv): ValidationError[] {
   const errors: ValidationError[] = [];
 
-  if (!(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN)) {
+  if (!(env.OPENAI_API_KEY || env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN)) {
     errors.push({
-      feature: "aiGateway",
-      missing: ["AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN"],
+      feature: "aiProvider",
+      missing: ["OPENAI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN"],
     });
   }
 

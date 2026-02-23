@@ -1,6 +1,6 @@
 "use client";
 
-import { useChat, useChatActions } from "@ai-sdk-tools/store";
+import { useChat } from "@ai-sdk-tools/store";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -26,20 +26,21 @@ export function ChatSync({
   const [_, setAutoResume] = useState(true);
 
   const isAuthenticated = !!session?.user;
-  const { stop } = useChatActions<ChatMessage>();
   const threadInitialMessages = useThreadInitialMessages();
 
   const lastMessage = threadInitialMessages.at(-1);
   const isLastMessagePartial = !!lastMessage?.metadata?.activeStreamId;
 
   // Backstop: if we remount ChatSync (e.g. threadEpoch changes), ensure the prior
-  // in-flight stream is aborted and we don't replay old deltas.
+  // stream buffer is cleared so we don't replay old deltas.
+  // Do not force-stop the active request here: navigating from "/" to "/chat/:id"
+  // remounts ChatSync on first send, and aborting at unmount can cancel the
+  // initial /api/chat request before persistence completes.
   useEffect(
     () => () => {
-      stop?.();
       setDataStream([]);
     },
-    [setDataStream, stop]
+    [setDataStream]
   );
 
   useChat<ChatMessage>({

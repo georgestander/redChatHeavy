@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
 import { db } from "./db/client";
 import { schema, user as userTable } from "./db/schema";
@@ -8,9 +7,10 @@ import { schema, user as userTable } from "./db/schema";
 const baseURL =
   env.APP_URL ?? (env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined);
 export const DEV_LOCAL_USER_COOKIE_NAME = "chatjs.dev_user_id";
-const DEV_LOCAL_EMAIL = "dev@localhost";
-const DEV_LOCAL_DEFAULT_USER_ID = "local-dev-user";
-let devLocalUserIdPromise: Promise<string> | null = null;
+export const DEV_LOCAL_EMAIL = "local-dev-user@localhost";
+export const DEV_LOCAL_DEFAULT_USER_ID = "local-dev-user";
+let ensureDevLocalUserPromise: Promise<void> | null = null;
+const DEV_LOCAL_USER_MAX_RETRIES = 3;
 
 function isLocalTcpPostgresUrl(databaseUrl: string): boolean {
   try {
@@ -20,7 +20,9 @@ function isLocalTcpPostgresUrl(databaseUrl: string): boolean {
     const isLocalHost =
       parsed.hostname === "127.0.0.1" ||
       parsed.hostname === "localhost" ||
-      parsed.hostname === "::1";
+      parsed.hostname === "::1" ||
+      parsed.hostname.endsWith(".hyperdrive.local") ||
+      parsed.hostname === "hyperdrive.local";
     return isPostgresProtocol && isLocalHost;
   } catch {
     return false;
@@ -28,81 +30,68 @@ function isLocalTcpPostgresUrl(databaseUrl: string): boolean {
 }
 
 function isDevLocalSessionFallbackEnabled(): boolean {
-  return isLocalTcpPostgresUrl(env.DATABASE_URL);
+  return (
+    process.env.CHATJS_LOCAL_MODE === "1" ||
+    (process.env.SKIP_ENV_VALIDATION === "1" &&
+      process.env.NODE_ENV !== "production") ||
+    isLocalTcpPostgresUrl(env.DATABASE_URL)
+  );
 }
 
 export function isDevLocalAuthRuntime(): boolean {
   return isDevLocalSessionFallbackEnabled();
 }
 
-function getCookieValue(cookieHeader: string | null, name: string): string | null {
-  if (!cookieHeader) {
-    return null;
-  }
-
-  const cookie = cookieHeader
-    .split(";")
-    .map((value) => value.trim())
-    .find((value) => value.startsWith(`${name}=`));
-
-  if (!cookie) {
-    return null;
-  }
-
-  const rawValue = cookie.slice(name.length + 1);
-  try {
-    return decodeURIComponent(rawValue);
-  } catch {
-    return rawValue;
-  }
-}
-
-async function ensureDevLocalUserId(): Promise<string> {
+async function ensureDevLocalUserExists(): Promise<void> {
   if (!isDevLocalSessionFallbackEnabled()) {
-    return DEV_LOCAL_DEFAULT_USER_ID;
+    return;
   }
 
-  if (!devLocalUserIdPromise) {
-    devLocalUserIdPromise = (async () => {
-      try {
-        const [existingUser] = await db
-          .select({ id: userTable.id })
-          .from(userTable)
-          .where(eq(userTable.email, DEV_LOCAL_EMAIL))
-          .limit(1);
-
-        if (existingUser?.id) {
-          return existingUser.id;
+  if (!ensureDevLocalUserPromise) {
+    ensureDevLocalUserPromise = (async () => {
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= DEV_LOCAL_USER_MAX_RETRIES; attempt += 1) {
+        try {
+          await db
+            .insert(userTable)
+            .values({
+              id: DEV_LOCAL_DEFAULT_USER_ID,
+              email: DEV_LOCAL_EMAIL,
+              name: "Dev User",
+              emailVerified: true,
+            })
+            .onConflictDoUpdate({
+              target: userTable.id,
+              set: {
+                email: DEV_LOCAL_EMAIL,
+                name: "Dev User",
+                emailVerified: true,
+                updatedAt: new Date(),
+              },
+            });
+          return;
+        } catch (error) {
+          lastError = error;
+          if (attempt < DEV_LOCAL_USER_MAX_RETRIES) {
+            await new Promise((resolve) => {
+              setTimeout(resolve, 150 * attempt);
+            });
+          }
         }
-
-        await db
-          .insert(userTable)
-          .values({
-            id: DEV_LOCAL_DEFAULT_USER_ID,
-            email: DEV_LOCAL_EMAIL,
-            name: "Dev User",
-            emailVerified: true,
-          })
-          .onConflictDoNothing();
-
-        const [createdUser] = await db
-          .select({ id: userTable.id })
-          .from(userTable)
-          .where(eq(userTable.email, DEV_LOCAL_EMAIL))
-          .limit(1);
-
-        return createdUser?.id ?? DEV_LOCAL_DEFAULT_USER_ID;
-      } catch (error) {
-        console.warn(
-          "[auth] failed to ensure local dev user; falling back to default local session id",
-          error
-        );
-        return DEV_LOCAL_DEFAULT_USER_ID;
       }
-    })();
+
+      throw (
+        lastError ??
+        new Error("Failed to ensure local dev user record in database")
+      );
+    })().catch((error) => {
+      ensureDevLocalUserPromise = null;
+      console.warn("[auth] failed to ensure local dev user record", error);
+      throw error;
+    });
   }
 
-  return await devLocalUserIdPromise;
+  await ensureDevLocalUserPromise;
 }
 
 export const auth = betterAuth({
@@ -190,7 +179,7 @@ function createDevLocalSession(userId: string): Session {
     user: {
       id: userId,
       name: "Dev User",
-      email: "dev@localhost",
+      email: DEV_LOCAL_EMAIL,
       emailVerified: true,
       image: null,
       createdAt: now,
@@ -204,23 +193,20 @@ export function getDevLocalSessionFromHeaders(headers: Headers): Session | null 
     return null;
   }
 
-  const userId = getCookieValue(headers.get("cookie"), DEV_LOCAL_USER_COOKIE_NAME);
-  if (!userId) {
-    return null;
-  }
-
-  return createDevLocalSession(userId);
+  return createDevLocalSession(DEV_LOCAL_DEFAULT_USER_ID);
 }
 
 export async function getServerSession(headers: Headers): Promise<Session | null> {
   if (isDevLocalSessionFallbackEnabled()) {
-    const devSessionFromCookie = getDevLocalSessionFromHeaders(headers);
-    if (devSessionFromCookie) {
-      return devSessionFromCookie;
+    try {
+      await ensureDevLocalUserExists();
+    } catch (error) {
+      console.warn(
+        "[auth] continuing with dev local session after user ensure failure",
+        error
+      );
     }
-
-    const localUserId = await ensureDevLocalUserId();
-    return createDevLocalSession(localUserId);
+    return createDevLocalSession(DEV_LOCAL_DEFAULT_USER_ID);
   }
 
   return await auth.api.getSession({ headers });

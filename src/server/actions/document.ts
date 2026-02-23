@@ -2,7 +2,7 @@
 
 import { requestInfo } from "rwsdk/worker";
 import type { z } from "zod";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import {
   getDocumentById,
   getDocumentsById,
@@ -18,9 +18,7 @@ type DocumentIdInput = z.infer<typeof documentIdInputSchema>;
 type SaveDocumentInput = z.infer<typeof saveDocumentInputSchema>;
 
 async function requireUser() {
-  const session = await auth.api.getSession({
-    headers: requestInfo.request.headers,
-  });
+  const session = await getServerSession(requestInfo.request.headers);
 
   if (!session?.user) {
     throw new Error("UNAUTHORIZED");

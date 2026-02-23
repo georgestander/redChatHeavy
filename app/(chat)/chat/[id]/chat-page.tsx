@@ -1,6 +1,6 @@
 "use client";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { ChatSystem } from "@/components/chat-system";
 import {
   useGetChatBranchesQueryOptions,
@@ -16,11 +16,19 @@ import { useSession } from "@/providers/session-provider";
 function ChatPageContent({ chatId }: { chatId: string }) {
   const searchParams = useSearchParams();
   const getChatByIdQueryOptions = useGetChatByIdQueryOptions(chatId);
-  const { data: chat } = useSuspenseQuery(getChatByIdQueryOptions);
+  const chatQuery = useQuery(getChatByIdQueryOptions);
   const getMessagesByChatIdQueryOptions = useGetChatMessagesQueryOptions();
-  const { data: messages } = useSuspenseQuery(getMessagesByChatIdQueryOptions);
+  const messagesQuery = useQuery(getMessagesByChatIdQueryOptions);
   const getChatBranchesQueryOptions = useGetChatBranchesQueryOptions();
-  const { data: branches } = useSuspenseQuery(getChatBranchesQueryOptions);
+  const branchesQuery = useQuery(getChatBranchesQueryOptions);
+  const chat = chatQuery.data;
+  const messages = messagesQuery.data ?? [];
+  const branches = branchesQuery.data ?? [];
+
+  const isBootstrapping =
+    (getChatByIdQueryOptions.enabled && !chatQuery.isFetched) ||
+    (getMessagesByChatIdQueryOptions.enabled && !messagesQuery.isFetched) ||
+    (getChatBranchesQueryOptions.enabled && !branchesQuery.isFetched);
 
   const activeBranchId = useMemo(
     () => resolveActiveBranchId(branches, searchParams.get("branch")),
@@ -32,7 +40,55 @@ function ChatPageContent({ chatId }: { chatId: string }) {
     branches,
   });
 
-  if (!chat) {
+  if (isBootstrapping) {
+    return (
+      <div className="flex h-dvh items-center justify-center">
+        <div className="text-muted-foreground">Loading chat...</div>
+      </div>
+    );
+  }
+
+  const resolvedChatId = chat?.id ?? chatId;
+
+  return (
+    <ChatSystem
+      id={resolvedChatId}
+      activeBranchId={activeBranchId}
+      branches={branches}
+      initialMessages={initialMessages}
+      initialTool={initialTool}
+      isReadonly={false}
+      key={`${resolvedChatId}:${activeBranchId ?? "root"}`}
+    />
+  );
+}
+
+export function ChatPage() {
+  const [isHydrated, setIsHydrated] = useState(false);
+  const { id, isPersisted } = useChatId();
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Anonymous users can't access persisted chat pages
+  useEffect(() => {
+    if (isHydrated && isPersisted && !isPending && !session?.user) {
+      router.replace("/");
+    }
+  }, [isHydrated, isPersisted, isPending, router, session?.user]);
+
+  if (!isHydrated) {
+    return (
+      <div className="flex h-dvh items-center justify-center">
+        <div className="text-muted-foreground">Loading chat...</div>
+      </div>
+    );
+  }
+
+  if (!isPersisted) {
     return (
       <div className="flex h-dvh items-center justify-center">
         <div className="text-muted-foreground">Chat not found.</div>
@@ -40,35 +96,18 @@ function ChatPageContent({ chatId }: { chatId: string }) {
     );
   }
 
-  return (
-    <ChatSystem
-      id={chat.id}
-      activeBranchId={activeBranchId}
-      branches={branches}
-      initialMessages={initialMessages}
-      initialTool={initialTool}
-      isReadonly={false}
-      key={`${chat.id}:${activeBranchId ?? "root"}`}
-    />
-  );
-}
-
-export function ChatPage() {
-  const { id, isPersisted } = useChatId();
-  const { data: session, isPending } = useSession();
-  const router = useRouter();
-
-  // Anonymous users can't access persisted chat pages
-  useEffect(() => {
-    if (isPersisted && !isPending && !session?.user) {
-      router.replace("/");
-    }
-  }, [isPersisted, isPending, router, session?.user]);
-
-  if (!isPersisted) {
+  if (isPending) {
     return (
       <div className="flex h-dvh items-center justify-center">
-        <div className="text-muted-foreground">Chat not found.</div>
+        <div className="text-muted-foreground">Loading chat...</div>
+      </div>
+    );
+  }
+
+  if (!session?.user) {
+    return (
+      <div className="flex h-dvh items-center justify-center">
+        <div className="text-muted-foreground">Redirecting...</div>
       </div>
     );
   }

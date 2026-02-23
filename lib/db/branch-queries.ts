@@ -141,10 +141,11 @@ export async function assignMessagesWithoutBranchToRoot({
   chatId: string;
   rootBranchId: string;
 }): Promise<number> {
-  const updated = await db
+  const updatedRows = await db
     .update(message)
     .set({ branchId: rootBranchId })
-    .where(and(eq(message.chatId, chatId), isNull(message.branchId)));
+    .where(and(eq(message.chatId, chatId), isNull(message.branchId)))
+    .returning();
 
-  return Number(updated.rowCount ?? 0);
+  return updatedRows.length;
 }

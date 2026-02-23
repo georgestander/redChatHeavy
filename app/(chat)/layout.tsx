@@ -33,22 +33,23 @@ export default async function ChatLayout({
 
   // Always fetch chat models - needed for ChatModelsProvider and cookie validation
   const chatModels = await getChatModels();
+  const fallbackModel = (chatModels[0]?.id ?? DEFAULT_CHAT_MODEL) as AppModelId;
 
   // Check if the model from cookie exists in available models
-  let defaultModel = cookieModel ?? DEFAULT_CHAT_MODEL;
+  let defaultModel = cookieModel ?? fallbackModel;
 
   if (cookieModel) {
     const modelExists = chatModels.some((m) => m.id === cookieModel);
     if (!modelExists) {
       // Model doesn't exist in available models, fall back to default
-      defaultModel = DEFAULT_CHAT_MODEL;
+      defaultModel = fallbackModel;
     } else if (isAnonymous) {
       // For anonymous users, also check if the model is in their allowed list
       const isModelAvailable = ANONYMOUS_LIMITS.AVAILABLE_MODELS.includes(
         cookieModel as (typeof ANONYMOUS_LIMITS.AVAILABLE_MODELS)[number]
       );
       if (!isModelAvailable) {
-        defaultModel = DEFAULT_CHAT_MODEL;
+        defaultModel = fallbackModel;
       }
     }
   }

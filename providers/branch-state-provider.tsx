@@ -76,7 +76,11 @@ export function BranchStateProvider({
 
   const setActiveBranchId = useCallback(
     (branchId: string, options?: { history?: BranchHistoryMode }) => {
-      const nextParams = new URLSearchParams(searchParams.toString());
+      const nextParams = new URLSearchParams(
+        typeof window === "undefined"
+          ? searchParams.toString()
+          : window.location.search
+      );
       nextParams.set("branch", branchId);
       updateSearchParams(nextParams, { history: options?.history ?? "replace" });
     },
@@ -85,7 +89,11 @@ export function BranchStateProvider({
 
   const setCompareMode = useCallback(
     (enabled: boolean, options?: { history?: BranchHistoryMode }) => {
-      const nextParams = new URLSearchParams(searchParams.toString());
+      const nextParams = new URLSearchParams(
+        typeof window === "undefined"
+          ? searchParams.toString()
+          : window.location.search
+      );
 
       if (enabled) {
         nextParams.set("compare", "1");

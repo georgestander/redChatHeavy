@@ -693,6 +693,10 @@ export function useGetChatByIdQueryOptions(chatId: string) {
     queryFn: async () => {
       try {
         const chat = await getChatByIdAction({ chatId });
+        if (!chat) {
+          return null;
+        }
+
         return hydrateChatDates(chat as SerializedChat);
       } catch (error) {
         console.error("Failed to load chat by id", error);

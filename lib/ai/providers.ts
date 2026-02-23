@@ -2,7 +2,7 @@ import type { AnthropicProviderOptions } from "@ai-sdk/anthropic";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
 import { gateway } from "@ai-sdk/gateway";
 import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
-import type { OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
+import { createOpenAI, type OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 import { extractReasoningMiddleware, wrapLanguageModel } from "ai";
 import type {
   ImageModelId,
@@ -18,15 +18,41 @@ const _telemetryConfig = {
   },
 };
 
+const OPENAI_FALLBACK_MODEL_ID = "gpt-5-nano";
+const ENABLE_AI_SDK_DEVTOOLS = process.env.AI_SDK_DEVTOOLS === "1";
+const OPENAI_MODEL_ALIASES: Record<string, string> = {
+  "codex-mini": "gpt-5-mini",
+  "codex-mini-latest": "gpt-5-mini",
+};
+
+function hasOpenAIKey(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY);
+}
+
+function toOpenAIModelId(modelId: string): string {
+  const normalized = modelId.startsWith("openai/")
+    ? modelId.replace("openai/", "")
+    : modelId;
+
+  return OPENAI_MODEL_ALIASES[normalized] ?? normalized;
+}
+
 export const getLanguageModel = async (modelId: ModelId) => {
   const model = await getAppModelDefinition(modelId);
-  const languageProvider = gateway(model.id);
+  const useDirectOpenAI = hasOpenAIKey();
+  const languageProvider = useDirectOpenAI
+    ? createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(
+        model.owned_by === "openai"
+          ? toOpenAIModelId(model.id)
+          : OPENAI_FALLBACK_MODEL_ID
+      )
+    : gateway(model.id);
 
   const middlewares: Parameters<typeof wrapLanguageModel>[0]["middleware"][] =
     [];
 
   // Add devtools middleware in development
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "development" && ENABLE_AI_SDK_DEVTOOLS) {
     middlewares.push(devToolsMiddleware());
   }
 
@@ -48,11 +74,19 @@ export const getLanguageModel = async (modelId: ModelId) => {
 };
 
 export const getImageModel = (modelId: ImageModelId) =>
-  gateway.imageModel(modelId);
+  hasOpenAIKey()
+    ? createOpenAI({ apiKey: process.env.OPENAI_API_KEY }).imageModel("gpt-image-1")
+    : gateway.imageModel(modelId);
 
 // Get a multimodal language model that can generate images via generateText
 export const getMultimodalImageModel = (modelId: MultimodalImageModelId) =>
-  gateway(modelId);
+  hasOpenAIKey()
+    ? createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(
+        modelId.startsWith("openai/")
+          ? toOpenAIModelId(modelId)
+          : OPENAI_FALLBACK_MODEL_ID
+      )
+    : gateway(modelId);
 
 // Model aliases removed - use getLanguageModel directly with specific model IDs
 
@@ -74,6 +108,11 @@ export const getModelProviderOptions = async (
   | Record<string, never>
 > => {
   const model = await getAppModelDefinition(providerModelId);
+  const useDirectOpenAI = hasOpenAIKey();
+  if (useDirectOpenAI && model.owned_by !== "openai") {
+    return {};
+  }
+
   if (model.owned_by === "openai") {
     if (model.reasoning) {
       return {

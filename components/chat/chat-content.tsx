@@ -122,7 +122,9 @@ function PureChatContent({
   } = useBranchState();
   const isMobile = useIsMobile();
   const messageIds = useMessageIds() as string[];
-  const hasMessages = messageIds.length > 0;
+  const hasBranchSelectionContext =
+    (activeBranch?.createdFromExcerpt?.trim().length ?? 0) > 0;
+  const hasMessages = messageIds.length > 0 || hasBranchSelectionContext;
 
   const allMessagesQuery = useQuery({
     queryKey: isShared

@@ -25,7 +25,7 @@ import {
   getAnonymousSessionFromRequest,
   serializeAnonymousSessionCookie,
 } from "@/lib/anonymous-session";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import {
   buildContextForBranchSend,
   ensureRootBranchForChat,
@@ -42,7 +42,6 @@ import {
   getMessageById,
   getMessageCanceledAt,
   getProjectById,
-  getUserById,
   saveChat,
   saveMessage,
   updateMessage,
@@ -72,6 +71,8 @@ const SSE_BLOCK_SEPARATOR = "\n\n";
 const STREAM_BUFFER_BATCH_SIZE = 24;
 const STREAM_BUFFER_FLUSH_DELAY_MS = 120;
 const MAX_PREVIOUS_CONTEXT_TOKENS = 20_000;
+const TITLE_GENERATION_TIMEOUT_MS = 4_000;
+const DEBUG_LOCAL_CHAT = process.env.NODE_ENV === "development";
 
 function runInBackground(task: () => Promise<unknown>): void {
   void task().catch((error) => {
@@ -340,8 +341,14 @@ async function handleChatValidation({
   resolvedBranchId: string | null;
 }> {
   const log = createModuleLogger("api:chat:validation");
+  if (DEBUG_LOCAL_CHAT) {
+    console.log("[chat:debug] handleChatValidation:start");
+  }
 
   const chat = await getChatById({ id: chatId });
+  if (DEBUG_LOCAL_CHAT) {
+    console.log("[chat:debug] handleChatValidation:after-getChatById");
+  }
   let isNewChat = false;
   let resolvedBranchId: string | null = null;
 
@@ -356,11 +363,64 @@ async function handleChatValidation({
     }
   } else {
     isNewChat = true;
-    const title = await generateTitleFromUserMessage({
-      message: userMessage,
-    });
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] handleChatValidation:before-title");
+    }
+    const fallbackTitle = (() => {
+      const firstTextPart = userMessage.parts?.find(
+        (
+          part
+        ): part is {
+          type: "text";
+          text: string;
+        } => part.type === "text" && "text" in part && typeof part.text === "string"
+      );
+      const normalized = (firstTextPart?.text || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!normalized) {
+        return "New Chat";
+      }
+      const truncated = normalized.slice(0, 80).trim();
+      return truncated.length > 0 ? truncated : "New Chat";
+    })();
+    const shouldUseFallbackTitleOnly =
+      process.env.CHATJS_LOCAL_MODE === "1" ||
+      process.env.SKIP_ENV_VALIDATION === "1";
+    const title = shouldUseFallbackTitleOnly
+      ? fallbackTitle
+      : await (async () => {
+        let timeoutId: NodeJS.Timeout | null = null;
+        try {
+          const timeoutPromise = new Promise<string>((resolve) => {
+            timeoutId = setTimeout(() => {
+              resolve(fallbackTitle);
+          }, TITLE_GENERATION_TIMEOUT_MS);
+        });
 
+        return await Promise.race([
+          generateTitleFromUserMessage({ message: userMessage }),
+          timeoutPromise,
+        ]);
+      } catch {
+        return fallbackTitle;
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
+      })();
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] handleChatValidation:after-title");
+    }
+
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] handleChatValidation:before-saveChat");
+    }
     await saveChat({ id: chatId, userId, title, projectId });
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] handleChatValidation:after-saveChat");
+    }
     await ensureRootBranchForChat({
       chatId,
       title: "Main",
@@ -374,7 +434,13 @@ async function handleChatValidation({
   });
   userMessage.metadata.branchId = resolvedBranchId;
 
+  if (DEBUG_LOCAL_CHAT) {
+    console.log("[chat:debug] handleChatValidation:before-getMessageById");
+  }
   const [existentMessage] = await getMessageById({ id: userMessage.id });
+  if (DEBUG_LOCAL_CHAT) {
+    console.log("[chat:debug] handleChatValidation:after-getMessageById");
+  }
 
   if (existentMessage && existentMessage.chatId !== chatId) {
     log.warn("Unauthorized - message chatId mismatch");
@@ -589,24 +655,35 @@ async function createChatStream({
         });
       }
 
-      const { result, contextForLLM } = await createCoreChatAgent({
-        system,
-        userMessage,
-        previousMessages,
-        selectedModelId,
-        explicitlyRequestedTools,
-        userId,
-        budgetAllowedTools: allowedTools,
-        abortSignal: abortController.signal,
-        messageId,
-        dataStream,
-        onError: (error) => {
-          log.error({ error }, "streamText error");
-        },
-        onChunk,
-        mcpConnectors,
-        costAccumulator,
-      });
+      let result: Awaited<ReturnType<typeof createCoreChatAgent>>["result"];
+      let contextForLLM: Awaited<
+        ReturnType<typeof createCoreChatAgent>
+      >["contextForLLM"];
+      try {
+        const coreChatAgent = await createCoreChatAgent({
+          system,
+          userMessage,
+          previousMessages,
+          selectedModelId,
+          explicitlyRequestedTools,
+          userId,
+          budgetAllowedTools: allowedTools,
+          abortSignal: abortController.signal,
+          messageId,
+          dataStream,
+          onError: (error) => {
+            log.error({ error }, "streamText error");
+          },
+          onChunk,
+          mcpConnectors,
+          costAccumulator,
+        });
+        result = coreChatAgent.result;
+        contextForLLM = coreChatAgent.contextForLLM;
+      } catch (error) {
+        log.error({ error }, "createCoreChatAgent failed");
+        throw error;
+      }
 
       const initialMetadata: ChatMessage["metadata"] = {
         createdAt: new Date(),
@@ -616,48 +693,52 @@ async function createChatStream({
         activeStreamId: isAnonymous ? null : streamId,
       };
 
-      dataStream.merge(
-        result.toUIMessageStream({
-          sendReasoning: true,
-          messageMetadata: ({ part }) => {
-            // send custom information to the client on start:
-            if (part.type === "start") {
-              return initialMetadata;
-            }
-
-            // when the message is finished, send additional information:
-            if (part.type === "finish") {
-              // Add main stream LLM usage to accumulator
-              if (part.totalUsage) {
-                costAccumulator.addLLMCost(
-                  selectedModelId,
-                  part.totalUsage,
-                  "main-chat"
-                );
+      try {
+        dataStream.merge(
+          result.toUIMessageStream({
+            sendReasoning: true,
+            messageMetadata: ({ part }) => {
+              // send custom information to the client on start:
+              if (part.type === "start") {
+                return initialMetadata;
               }
-              return {
-                ...initialMetadata,
-                usage: part.totalUsage,
-                activeStreamId: null,
-              };
-            }
-          },
-        })
-      );
-      await result.consumeStream();
 
-      const response = await result.response;
-      const responseMessages = response.messages;
+              // when the message is finished, send additional information:
+              if (part.type === "finish") {
+                // Add main stream LLM usage to accumulator
+                if (part.totalUsage) {
+                  costAccumulator.addLLMCost(
+                    selectedModelId,
+                    part.totalUsage,
+                    "main-chat"
+                  );
+                }
+                return {
+                  ...initialMetadata,
+                  usage: part.totalUsage,
+                  activeStreamId: null,
+                };
+              }
+            },
+          })
+        );
 
-      // Generate and stream follow-up suggestions
-      const followupSuggestionsResult = generateFollowupSuggestions([
-        ...contextForLLM,
-        ...responseMessages,
-      ]);
-      await streamFollowupSuggestions({
-        followupSuggestionsResult,
-        writer: dataStream,
-      });
+        const response = await result.response;
+        const responseMessages = response.messages;
+
+        // Generate and stream follow-up suggestions
+        const followupSuggestionsResult = generateFollowupSuggestions([
+          ...contextForLLM,
+          ...responseMessages,
+        ]);
+        await streamFollowupSuggestions({
+          followupSuggestionsResult,
+          writer: dataStream,
+        });
+      } catch (error) {
+        log.error({ error }, "chat stream consumption failed");
+        throw error;
+      }
     },
     generateId: () => messageId,
     onFinish: async ({ messages }) => {
@@ -724,6 +805,9 @@ async function executeChatRequest({
 }): Promise<Response> {
   const messageId = generateUUID();
   const streamId = generateUUID();
+  const isLocalDevMode =
+    process.env.CHATJS_LOCAL_MODE === "1" ||
+    process.env.SKIP_ENV_VALIDATION === "1";
 
   if (!isAnonymous) {
     // Save placeholder assistant message immediately (needed for document creation)
@@ -748,7 +832,7 @@ async function executeChatRequest({
 
   // Create throttled cancel check (max once per second) for authenticated users
   const onChunk =
-    !isAnonymous && userId
+    !isAnonymous && userId && !isLocalDevMode
       ? throttle(async () => {
           const canceledAt = await getMessageCanceledAt({ messageId });
           if (canceledAt) {
@@ -782,7 +866,9 @@ async function executeChatRequest({
     Connection: "keep-alive",
   } as const;
 
-  const sseStream = stream.pipeThrough(new JsonToSseTransformStream());
+  const sseStream = stream
+    .pipeThrough(new JsonToSseTransformStream())
+    .pipeThrough(new TextEncoderStream());
   const streamBufferEnv = isAnonymous ? null : getStreamBufferBindings();
 
   if (streamBufferEnv) {
@@ -807,7 +893,6 @@ type SessionSetupResult =
       userId: string | null;
       isAnonymous: boolean;
       anonymousSession: AnonymousSession | null;
-      modelDefinition: AppModelDefinition;
     };
 
 async function validateAndSetupSession({
@@ -817,25 +902,24 @@ async function validateAndSetupSession({
   request: Request;
   selectedModelId: AppModelId;
 }): Promise<SessionSetupResult> {
-  const log = createModuleLogger("api:chat:setup");
+  if (DEBUG_LOCAL_CHAT) {
+    console.log("[chat:debug] validateAndSetupSession:start");
+  }
 
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await getServerSession(request.headers);
+  if (DEBUG_LOCAL_CHAT) {
+    console.log("[chat:debug] validateAndSetupSession:after-getServerSession");
+  }
   const userId = session?.user?.id ?? null;
   const isAnonymous = userId === null;
 
   const existingAnonymousSession = getAnonymousSessionFromRequest(request);
   let anonymousSession: AnonymousSession | null = existingAnonymousSession;
 
-  if (userId) {
-    const user = await getUserById({ userId });
-    if (!user) {
-      log.warn("User not found");
-      return {
-        success: false,
-        error: new Response("User not found", { status: 404 }),
-      };
+  if (!userId) {
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] validateAndSetupSession:anonymous-path");
     }
-  } else {
     const result = await handleAnonymousSession({
       request,
       existingSession: existingAnonymousSession,
@@ -848,23 +932,11 @@ async function validateAndSetupSession({
     anonymousSession = result.session;
   }
 
-  let modelDefinition: AppModelDefinition;
-  try {
-    modelDefinition = await getAppModelDefinition(selectedModelId);
-  } catch {
-    log.warn("Model not found");
-    return {
-      success: false,
-      error: new Response("Model not found", { status: 404 }),
-    };
-  }
-
   return {
     success: true,
     userId,
     isAnonymous,
     anonymousSession,
-    modelDefinition,
   };
 }
 
@@ -1029,6 +1101,9 @@ function applySetCookieHeader(response: Response, cookieValue: string): Response
 export async function POST(request: Request) {
   const log = createModuleLogger("api:chat");
   try {
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] POST:start");
+    }
     const {
       id: chatId,
       message: userMessage,
@@ -1040,6 +1115,24 @@ export async function POST(request: Request) {
       prevMessages: ChatMessage[];
       projectId?: string;
     } = await request.json();
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] POST:after-request-json");
+      console.log("[chat:debug] POST:request-shape", {
+        chatId,
+        messageId: userMessage?.id,
+        role: userMessage?.role,
+        partsCount: Array.isArray(userMessage?.parts)
+          ? userMessage.parts.length
+          : -1,
+        hasProjectId: Boolean(projectId),
+        prevMessagesCount: Array.isArray(anonymousPreviousMessages)
+          ? anonymousPreviousMessages.length
+          : -1,
+        selectedModel: userMessage?.metadata?.selectedModel,
+        parentMessageId: userMessage?.metadata?.parentMessageId,
+        branchId: userMessage?.metadata?.branchId ?? null,
+      });
+    }
 
     if (!userMessage) {
       log.warn("No user message found");
@@ -1058,13 +1151,15 @@ export async function POST(request: Request) {
       request,
       selectedModelId,
     });
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] POST:after-validateAndSetupSession");
+    }
 
     if (!sessionSetup.success) {
       return sessionSetup.error;
     }
 
-    const { userId, isAnonymous, anonymousSession, modelDefinition } =
-      sessionSetup;
+    const { userId, isAnonymous, anonymousSession } = sessionSetup;
 
     const selectedTool = userMessage.metadata.selectedTool ?? null;
 
@@ -1075,10 +1170,27 @@ export async function POST(request: Request) {
       projectId,
       anonymousSession,
     });
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] POST:after-prepareChatForRequest");
+    }
     if (chatPreparationResult.error) {
       return chatPreparationResult.error;
     }
     const { isNewChat, updatedAnonymousSession } = chatPreparationResult;
+
+    let modelDefinition: AppModelDefinition;
+    try {
+      if (DEBUG_LOCAL_CHAT) {
+        console.log("[chat:debug] POST:before-model-definition");
+      }
+      modelDefinition = await getAppModelDefinition(selectedModelId);
+      if (DEBUG_LOCAL_CHAT) {
+        console.log("[chat:debug] POST:after-model-definition");
+      }
+    } catch {
+      log.warn("Model not found");
+      return new Response("Model not found", { status: 404 });
+    }
 
     const explicitlyRequestedTools =
       determineExplicitlyRequestedTools(selectedTool);
@@ -1091,6 +1203,9 @@ export async function POST(request: Request) {
       modelDefinition,
       explicitlyRequestedTools,
     });
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] POST:after-prepareRequestContext");
+    }
 
     if (contextResult.error) {
       return contextResult.error;
@@ -1124,6 +1239,9 @@ export async function POST(request: Request) {
       timeoutId,
       mcpConnectors,
     });
+    if (DEBUG_LOCAL_CHAT) {
+      console.log("[chat:debug] POST:after-executeChatRequest");
+    }
 
     if (updatedAnonymousSession) {
       return applySetCookieHeader(

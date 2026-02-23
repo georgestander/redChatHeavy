@@ -6,7 +6,7 @@ import {
 } from "ai";
 import { ChatSDKError } from "@/lib/ai/errors";
 import type { ChatMessage } from "@/lib/ai/types";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import { getChatById, getChatMessageWithPartsById } from "@/lib/db/queries";
 import {
   resumeStreamBuffer,
@@ -84,7 +84,7 @@ export async function handleChatStreamRequest({
   }
 
   // Validate chat ownership
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await getServerSession(request.headers);
   const userId = session?.user?.id || null;
 
   const chat = await getChatById({ id: chatId });

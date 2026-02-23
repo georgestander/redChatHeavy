@@ -25,6 +25,9 @@ type SelectionState = {
   rect: DOMRect;
 };
 
+const BRANCH_POPOVER_WIDTH = 220;
+const BRANCH_POPOVER_HEIGHT = 40;
+
 function getElementFromNode(node: Node): Element | null {
   if (node.nodeType === Node.ELEMENT_NODE) {
     return node as Element;
@@ -230,23 +233,31 @@ export function AssistantBranchSelection({
       }
     };
 
-    const clearOnViewportChange = () => {
+    const clearOnViewportResize = () => {
       setSelection(null);
     };
 
     const handleSelectionChange = () => {
       scheduleSelectionCheck();
     };
+    const handlePointerUp = () => {
+      scheduleSelectionCheck();
+    };
+    const handleViewportScroll = () => {
+      scheduleSelectionCheck();
+    };
 
     window.addEventListener("keydown", handleEscape);
-    window.addEventListener("resize", clearOnViewportChange);
-    window.addEventListener("scroll", clearOnViewportChange, true);
+    window.addEventListener("resize", clearOnViewportResize);
+    window.addEventListener("scroll", handleViewportScroll, true);
+    document.addEventListener("pointerup", handlePointerUp);
     document.addEventListener("selectionchange", handleSelectionChange);
 
     return () => {
       window.removeEventListener("keydown", handleEscape);
-      window.removeEventListener("resize", clearOnViewportChange);
-      window.removeEventListener("scroll", clearOnViewportChange, true);
+      window.removeEventListener("resize", clearOnViewportResize);
+      window.removeEventListener("scroll", handleViewportScroll, true);
+      document.removeEventListener("pointerup", handlePointerUp);
       document.removeEventListener("selectionchange", handleSelectionChange);
       if (selectionRafRef.current !== null) {
         window.cancelAnimationFrame(selectionRafRef.current);
@@ -256,16 +267,29 @@ export function AssistantBranchSelection({
   }, [clearSelection, scheduleSelectionCheck]);
 
   const popoverStyle = useMemo(() => {
-    if (!selection) {
+    if (!selection || typeof window === "undefined") {
       return undefined;
     }
 
-    const top = Math.max(8, selection.rect.bottom + 8);
-    const left = Math.max(8, Math.min(selection.rect.left, window.innerWidth - 280));
+    const centerX = selection.rect.left + selection.rect.width / 2;
+    const left = Math.max(
+      8,
+      Math.min(
+        centerX - BRANCH_POPOVER_WIDTH / 2,
+        window.innerWidth - BRANCH_POPOVER_WIDTH - 8
+      )
+    );
+
+    const canRenderBelow =
+      selection.rect.bottom + BRANCH_POPOVER_HEIGHT + 8 <= window.innerHeight;
+    const top = canRenderBelow
+      ? selection.rect.bottom + 8
+      : Math.max(8, selection.rect.top - BRANCH_POPOVER_HEIGHT - 8);
 
     return {
       top,
       left,
+      width: BRANCH_POPOVER_WIDTH,
     };
   }, [selection]);
 
@@ -284,6 +308,7 @@ export function AssistantBranchSelection({
           style={{
             left: popoverStyle.left,
             top: popoverStyle.top,
+            width: popoverStyle.width,
           }}
         >
           <div className="flex items-center gap-1 rounded-md border bg-popover px-2 py-1.5 shadow-md">

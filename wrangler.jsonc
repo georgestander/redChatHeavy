@@ -1,7 +1,17 @@
 {
   "main": "./src/worker.tsx",
   "compatibility_date": "2026-01-31",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "no_handle_cross_request_promise_resolution"
+  ],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "22222222222222222222222222222222",
+      "localConnectionString": "postgresql://postgres:postgres@127.0.0.1:5432/chatjs"
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "KV_CACHE",

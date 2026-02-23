@@ -15,6 +15,8 @@ export type AppModelDefinition = Omit<ModelData, "id"> & {
 
 const DISABLED_MODELS = new Set(config.models.disabledModels);
 const PROVIDER_ORDER = config.models.providerOrder;
+const DIRECT_OPENAI_CONTEXT_WINDOW = 128_000;
+const DIRECT_OPENAI_MAX_TOKENS = 16_384;
 
 function buildAppModels(models: ModelData[]): AppModelDefinition[] {
   return models
@@ -78,6 +80,48 @@ function buildChatModels(
     });
 }
 
+const generatedAppModels = buildAppModels(generatedModels as unknown as ModelData[]);
+
+function buildDirectOpenAiFallbackModel(
+  modelId: AppModelId
+): AppModelDefinition {
+  const isReasoningVariant = modelId.endsWith("-reasoning");
+  const apiModelId = (
+    isReasoningVariant
+      ? modelId.slice(0, -"-reasoning".length)
+      : modelId
+  ) as ModelId;
+  const displayName = apiModelId.replace(/^openai\//, "");
+
+  return {
+    id: modelId,
+    apiModelId,
+    object: "model",
+    owned_by: "openai",
+    name: displayName,
+    description: `OpenAI model ${displayName} (direct mode fallback)`,
+    type: "language",
+    tags: isReasoningVariant ? ["reasoning"] : [],
+    context_window: DIRECT_OPENAI_CONTEXT_WINDOW,
+    max_tokens: DIRECT_OPENAI_MAX_TOKENS,
+    pricing: {},
+    reasoning: isReasoningVariant,
+    toolCall: true,
+    input: {
+      image: true,
+      text: true,
+      pdf: true,
+      video: false,
+      audio: false,
+    },
+    output: {
+      image: false,
+      text: true,
+      audio: false,
+    },
+  };
+}
+
 const fetchAllAppModels = cache(
   async (): Promise<AppModelDefinition[]> => {
     const models = await fetchModels();
@@ -99,6 +143,18 @@ export const fetchChatModels = cache(
 export async function getAppModelDefinition(
   modelId: AppModelId
 ): Promise<AppModelDefinition> {
+  const hasDirectOpenAiKey = Boolean(process.env.OPENAI_API_KEY);
+  if (hasDirectOpenAiKey) {
+    const generatedModel = generatedAppModels.find((model) => model.id === modelId);
+    if (generatedModel) {
+      return generatedModel;
+    }
+
+    if (modelId.startsWith("openai/")) {
+      return buildDirectOpenAiFallbackModel(modelId);
+    }
+  }
+
   const models = await fetchAllAppModels();
   const model = models.find((m) => m.id === modelId);
   if (!model) {
@@ -144,6 +200,16 @@ export function getDefaultEnabledModels(
   appModels: AppModelDefinition[]
 ): Set<AppModelId> {
   const enabled = new Set<AppModelId>(config.models.curatedDefaults);
+  const hasDirectOpenAiKey = Boolean(process.env.OPENAI_API_KEY);
+
+  // In direct OpenAI mode, expose all OpenAI chat models by default.
+  if (hasDirectOpenAiKey) {
+    for (const model of appModels) {
+      if (model.owned_by === "openai") {
+        enabled.add(model.id);
+      }
+    }
+  }
 
   // Add any new models from the API that aren't in our generated snapshot
   for (const model of appModels) {
