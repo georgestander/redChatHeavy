@@ -4,11 +4,61 @@ import { env } from "@/lib/env";
 import { db } from "./db/client";
 import { schema } from "./db/schema";
 
+const baseURL =
+  env.APP_URL ?? (env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined);
+export const DEV_LOCAL_USER_COOKIE_NAME = "chatjs.dev_user_id";
+
+function isLocalTcpPostgresUrl(databaseUrl: string): boolean {
+  try {
+    const parsed = new URL(databaseUrl);
+    const isPostgresProtocol =
+      parsed.protocol === "postgres:" || parsed.protocol === "postgresql:";
+    const isLocalHost =
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "::1";
+    return isPostgresProtocol && isLocalHost;
+  } catch {
+    return false;
+  }
+}
+
+function isDevLocalSessionFallbackEnabled(): boolean {
+  return isLocalTcpPostgresUrl(env.DATABASE_URL);
+}
+
+export function isDevLocalAuthRuntime(): boolean {
+  return isDevLocalSessionFallbackEnabled();
+}
+
+function getCookieValue(cookieHeader: string | null, name: string): string | null {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const cookie = cookieHeader
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${name}=`));
+
+  if (!cookie) {
+    return null;
+  }
+
+  const rawValue = cookie.slice(name.length + 1);
+  try {
+    return decodeURIComponent(rawValue);
+  } catch {
+    return rawValue;
+  }
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
   }),
+  ...(baseURL ? { baseURL } : {}),
   trustedOrigins: (request) => {
     const baseOrigins = [
       "http://localhost:5173",
@@ -69,3 +119,63 @@ export const auth = betterAuth({
 
 // Infer session type from the auth instance for type safety
 export type Session = typeof auth.$Infer.Session;
+
+function createDevLocalSession(userId: string): Session {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  return {
+    session: {
+      id: `dev-session-${userId}`,
+      token: `dev-token-${userId}`,
+      userId,
+      expiresAt,
+      createdAt: now,
+      updatedAt: now,
+      ipAddress: null,
+      userAgent: null,
+    },
+    user: {
+      id: userId,
+      name: "Dev User",
+      email: "dev@localhost",
+      emailVerified: true,
+      image: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+  };
+}
+
+export function getDevLocalSessionFromHeaders(headers: Headers): Session | null {
+  if (!isDevLocalSessionFallbackEnabled()) {
+    return null;
+  }
+
+  const userId = getCookieValue(headers.get("cookie"), DEV_LOCAL_USER_COOKIE_NAME);
+  if (!userId) {
+    return null;
+  }
+
+  return createDevLocalSession(userId);
+}
+
+export async function getServerSession(headers: Headers): Promise<Session | null> {
+  const devSession = getDevLocalSessionFromHeaders(headers);
+  if (devSession) {
+    return devSession;
+  }
+  try {
+    const session = await auth.api.getSession({ headers });
+    return session;
+  } catch (error) {
+    if (isDevLocalSessionFallbackEnabled()) {
+      console.warn(
+        "[auth] getSession failed in local runtime; treating as signed-out",
+        error
+      );
+      return null;
+    }
+    throw error;
+  }
+}

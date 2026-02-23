@@ -187,10 +187,15 @@ export function useGetChatMessagesQueryOptions() {
   return {
     queryKey,
     queryFn: async () => {
-      const messages = isShared
-        ? await getPublicChatMessages({ chatId: chatId || "" })
-        : await getChatMessages({ chatId: chatId || "" });
-      return (messages as SerializedChatMessage[]).map(hydrateMessageDates);
+      try {
+        const messages = isShared
+          ? await getPublicChatMessages({ chatId: chatId || "" })
+          : await getChatMessages({ chatId: chatId || "" });
+        return (messages as SerializedChatMessage[]).map(hydrateMessageDates);
+      } catch (error) {
+        console.error("Failed to load chat messages", error);
+        return [] as ChatMessage[];
+      }
     },
     enabled: !!chatId && isPersisted && (isShared || !!session?.user),
   };
@@ -208,10 +213,15 @@ export function useGetChatBranchesQueryOptions() {
   return {
     queryKey,
     queryFn: async () => {
-      const branches = isShared
-        ? await getPublicChatBranches({ chatId: chatId || "" })
-        : await getChatBranches({ chatId: chatId || "" });
-      return (branches as SerializedChatBranch[]).map(hydrateBranchDates);
+      try {
+        const branches = isShared
+          ? await getPublicChatBranches({ chatId: chatId || "" })
+          : await getChatBranches({ chatId: chatId || "" });
+        return (branches as SerializedChatBranch[]).map(hydrateBranchDates);
+      } catch (error) {
+        console.error("Failed to load chat branches", error);
+        return [] as ChatBranch[];
+      }
     },
     enabled: !!chatId && isPersisted && (isShared || !!session?.user),
   };
@@ -681,8 +691,13 @@ export function useGetChatByIdQueryOptions(chatId: string) {
   return {
     queryKey: chatKeys.byId(chatId),
     queryFn: async () => {
-      const chat = await getChatByIdAction({ chatId });
-      return hydrateChatDates(chat as SerializedChat);
+      try {
+        const chat = await getChatByIdAction({ chatId });
+        return hydrateChatDates(chat as SerializedChat);
+      } catch (error) {
+        console.error("Failed to load chat by id", error);
+        return null;
+      }
     },
     enabled: !!chatId && !!session?.user,
   };

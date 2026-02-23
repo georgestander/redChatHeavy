@@ -3,6 +3,7 @@ import type { LayoutProps } from "rwsdk/router";
 import { ChatProviders } from "@/app/(chat)/chat-providers";
 import { getChatModels } from "@/app/actions/get-chat-models";
 import { AppSidebar } from "@/components/app-sidebar";
+import { DevAutoLogin } from "@/components/dev-auto-login";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import type { AppModelId } from "@/lib/ai/app-model-id";
@@ -13,6 +14,10 @@ import { ChatModelsProvider } from "@/providers/chat-models-provider";
 import { DefaultModelProvider } from "@/providers/default-model-provider";
 import { ReactQueryProvider } from "@/providers/react-query-provider";
 import { SessionProvider } from "@/providers/session-provider";
+
+function supportsDevAutoLogin(databaseUrl: string | undefined): boolean {
+  return process.env.NODE_ENV === "development" && Boolean(databaseUrl);
+}
 
 function getCookieValue(
   cookieHeader: string | null,
@@ -45,6 +50,7 @@ export async function ChatLayout({
 }: LayoutProps<AppRequestInfo>) {
   const session = requestInfo?.ctx?.session ?? null;
   const cookieHeader = requestInfo?.request?.headers.get("cookie") ?? null;
+  const shouldAutoDevLogin = supportsDevAutoLogin(process.env.DATABASE_URL);
 
   const isCollapsed = getCookieValue(cookieHeader, "sidebar:state") !== "true";
   const cookieModel = getCookieValue(cookieHeader, "chat-model") as
@@ -72,6 +78,7 @@ export async function ChatLayout({
   return (
     <ReactQueryProvider>
       <SessionProvider initialSession={session}>
+        <DevAutoLogin enabled={shouldAutoDevLogin} />
         <ChatProviders>
           <SidebarProvider defaultOpen={!isCollapsed}>
             <AppSidebar />

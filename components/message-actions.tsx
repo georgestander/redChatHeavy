@@ -12,6 +12,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { ChatMessage } from "@/lib/ai/types";
 import { useMessageRoleById } from "@/lib/stores/hooks-base";
 import { useBranchState } from "@/providers/branch-state-provider";
+import { useSession } from "@/providers/session-provider";
 import { useChatVotes } from "./chat/use-chat-votes";
 import { FeedbackActions } from "./feedback-actions";
 import { MessageSiblings } from "./message-siblings";
@@ -72,6 +73,9 @@ function PureMessageActions({
     useCreateChatBranch();
   const { activeBranchId, setActiveBranchId, setCompareMode } =
     useBranchState();
+  const { data: session } = useSession();
+  const isAuthenticated = Boolean(session?.user);
+  const shouldUsePersistedBranching = isAuthenticated;
 
   const isMobile = useIsMobile();
 
@@ -116,7 +120,7 @@ function PureMessageActions({
       {!isReadOnly && (
         <Action
           className="h-7 w-7 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          disabled={isCreatingBranch}
+          disabled={shouldUsePersistedBranching && isCreatingBranch}
           onClick={async () => {
             const message = storeApi
               .getState()
@@ -132,6 +136,31 @@ function PureMessageActions({
                 : textContent || null;
             const { span, excerpt } = getSelectionSpan(textContent);
             const branchExcerpt = (excerpt ?? fallbackExcerpt)?.slice(0, 2000) ?? null;
+
+            if (!shouldUsePersistedBranching) {
+              const currentMessages =
+                storeApi.getState().getThrottledMessages() as ChatMessage[];
+              const messageIndex = currentMessages.findIndex(
+                (m) => m.id === messageId
+              );
+              if (messageIndex === -1) {
+                toast.error("Could not branch this message");
+                return;
+              }
+
+              const localBranchMessages = currentMessages.slice(
+                0,
+                messageIndex + 1
+              );
+              storeApi.getState().setMessages(localBranchMessages);
+
+              toast.success(
+                branchExcerpt
+                  ? "Started local branch from selection"
+                  : "Started local branch"
+              );
+              return;
+            }
 
             try {
               const createdBranch = await createBranch({
@@ -154,7 +183,13 @@ function PureMessageActions({
               toast.error("Failed to create branch");
             }
           }}
-          tooltip={isCreatingBranch ? "Creating branch..." : "Branch message"}
+          tooltip={
+            shouldUsePersistedBranching
+              ? isCreatingBranch
+                ? "Creating branch..."
+                : "Branch message"
+              : "Branch message (local)"
+          }
         >
           <GitBranchPlus className="h-3.5 w-3.5" />
         </Action>
