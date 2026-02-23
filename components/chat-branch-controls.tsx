@@ -5,11 +5,13 @@ import {
   ChevronDown,
   Columns2,
   GitBranch,
+  PanelLeft,
   PencilLine,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useRenameChatBranch } from "@/hooks/chat-sync-hooks";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useBranchState } from "@/providers/branch-state-provider";
 import { Button } from "./ui/button";
@@ -36,12 +38,15 @@ export function ChatBranchControls({ isReadonly }: { isReadonly: boolean }) {
     activeBranch,
     activeBranchId,
     compareMode,
+    compareSheetOpen,
     flattenedTree,
+    setCompareSheetOpen,
     setActiveBranchId,
     setCompareMode,
   } = useBranchState();
   const { mutateAsync: renameBranch, isPending: isRenaming } =
     useRenameChatBranch();
+  const isMobile = useIsMobile();
 
   const [renameOpen, setRenameOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -130,12 +135,30 @@ export function ChatBranchControls({ isReadonly }: { isReadonly: boolean }) {
         {canShowCompare ? (
           <Button
             className="h-8 px-2"
-            onClick={() => setCompareMode(!compareMode)}
+            onClick={() => {
+              const nextCompareMode = !compareMode;
+              setCompareMode(nextCompareMode);
+              if (isMobile) {
+                setCompareSheetOpen(nextCompareMode);
+              }
+            }}
             size="sm"
             variant={compareMode ? "secondary" : "ghost"}
           >
             <Columns2 className="h-4 w-4" />
             Compare
+          </Button>
+        ) : null}
+
+        {isMobile && compareMode ? (
+          <Button
+            className="h-8 px-2"
+            onClick={() => setCompareSheetOpen(!compareSheetOpen)}
+            size="sm"
+            variant={compareSheetOpen ? "secondary" : "ghost"}
+          >
+            <PanelLeft className="h-4 w-4" />
+            Parent
           </Button>
         ) : null}
       </div>
