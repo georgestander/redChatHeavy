@@ -253,6 +253,13 @@ async function createBranchFromSelection(page) {
   const page = await browser.newPage({ viewport: { width: 1512, height: 982 } });
 
   try {
+    await page.context().addCookies([
+      {
+        name: "chat-model",
+        value: "openai/gpt-5-nano",
+        url: BASE_URL,
+      },
+    ]);
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const newChatButton = page.getByRole('button', { name: /new chat/i });
