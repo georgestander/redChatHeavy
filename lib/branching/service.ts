@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ChatMessage } from "@/lib/ai/types";
+import { applyExcerptContextToPreviousMessages } from "@/lib/branching/context-policy";
 import {
   assignMessagesWithoutBranchToRoot,
   createChatBranch,
@@ -145,42 +146,6 @@ export async function updateBranchHeadForMessage({
   });
 }
 
-function getBranchChain(branches: ChatBranch[], branchId: string): ChatBranch[] {
-  const byId = new Map(branches.map((branch) => [branch.id, branch] as const));
-  const result: ChatBranch[] = [];
-  let current = byId.get(branchId);
-
-  while (current) {
-    result.push(current);
-    if (!current.parentBranchId) {
-      break;
-    }
-    current = byId.get(current.parentBranchId);
-  }
-
-  return result.reverse();
-}
-
-function buildSyntheticExcerptMessage(options: {
-  excerpt: string;
-  parentMessageId: string | null;
-  branchId: string;
-}): ChatMessage {
-  const content = `For reference, this question refers to branch context: "${options.excerpt}"`;
-  return {
-    id: `branch-excerpt-${options.branchId}`,
-    role: "user",
-    parts: [{ type: "text", text: content }],
-    metadata: {
-      createdAt: new Date(),
-      parentMessageId: options.parentMessageId,
-      branchId: options.branchId,
-      selectedModel: "" as ChatMessage["metadata"]["selectedModel"],
-      activeStreamId: null,
-    },
-  };
-}
-
 export async function buildContextForBranchSend(options: {
   chatId: string;
   requestedBranchId?: string | null;
@@ -208,17 +173,13 @@ export async function buildContextForBranchSend(options: {
   }
 
   const branches = await getChatBranchesByChatId({ chatId });
-  const chain = getBranchChain(branches, branchId);
-  const activeBranch = chain[chain.length - 1] ?? null;
+  const activeBranch = branches.find((branch) => branch.id === branchId) ?? null;
   const excerpt = activeBranch?.createdFromExcerpt?.trim() ?? "";
-  if (excerpt.length > 0) {
-    const synthetic = buildSyntheticExcerptMessage({
-      excerpt,
-      parentMessageId: previousMessages.at(-1)?.id ?? null,
-      branchId,
-    });
-    previousMessages = [...previousMessages, synthetic];
-  }
+  previousMessages = applyExcerptContextToPreviousMessages({
+    previousMessages,
+    branchId,
+    excerpt,
+  });
 
   return {
     branchId,
