@@ -14,10 +14,11 @@ import { ThinkingMessage } from "./thinking-message";
 
 type PureMessagesInternalProps = {
   isReadonly: boolean;
+  suppressGreeting?: boolean;
 };
 
 const PureMessagesInternal = memo(
-  ({ isReadonly }: PureMessagesInternalProps) => {
+  ({ isReadonly, suppressGreeting = false }: PureMessagesInternalProps) => {
     const chatId = useChatId();
     const status = useChatStatus();
     const messageIds = useMessageIds();
@@ -27,7 +28,7 @@ const PureMessagesInternal = memo(
     }
 
     if (messageIds.length === 0) {
-      return <Greeting />;
+      return suppressGreeting ? null : <Greeting />;
     }
 
     return (
@@ -59,9 +60,14 @@ type MessagesProps = {
   isReadonly: boolean;
   onModelChange?: (modelId: string) => void;
   className?: string;
+  suppressGreeting?: boolean;
 };
 
-function PureMessages({ isReadonly, className }: MessagesProps) {
+function PureMessages({
+  isReadonly,
+  className,
+  suppressGreeting = false,
+}: MessagesProps) {
   return (
     <Conversation className={cn("h-full w-full overflow-hidden", className)}>
       <ConversationContent
@@ -70,7 +76,10 @@ function PureMessages({ isReadonly, className }: MessagesProps) {
           className
         )}
       >
-        <PureMessagesInternal isReadonly={isReadonly} />
+        <PureMessagesInternal
+          isReadonly={isReadonly}
+          suppressGreeting={suppressGreeting}
+        />
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>
@@ -79,6 +88,10 @@ function PureMessages({ isReadonly, className }: MessagesProps) {
 
 export const Messages = memo(PureMessages, (prevProps, nextProps) => {
   if (prevProps.isReadonly !== nextProps.isReadonly) {
+    return false;
+  }
+
+  if (prevProps.suppressGreeting !== nextProps.suppressGreeting) {
     return false;
   }
 

@@ -54,12 +54,14 @@ function ActiveChatContent({
   projectId,
   isReadonly,
   hasMessages,
+  suppressWelcome,
 }: {
   chatId: string;
   className?: string;
   projectId?: string;
   isReadonly: boolean;
   hasMessages: boolean;
+  suppressWelcome: boolean;
 }) {
   const status = useChatStatus();
 
@@ -70,6 +72,7 @@ function ActiveChatContent({
         chatId={chatId}
         className={cn("bg-background", className)}
         isReadonly={isReadonly}
+        suppressGreeting={suppressWelcome}
         status={status}
       />
     ) : (
@@ -83,17 +86,20 @@ function ActiveChatContent({
   }
 
   // Non-project: keep both mounted, toggle visibility with CSS
+  const showWelcome = !hasMessages && !suppressWelcome;
+
   return (
     <>
       <ChatWelcome
         chatId={chatId}
-        className={cn(className, hasMessages && "hidden")}
+        className={cn(className, !showWelcome && "hidden")}
         status={status}
       />
       <MessagesPane
         chatId={chatId}
-        className={cn("bg-background", className, !hasMessages && "hidden")}
+        className={cn("bg-background", className, showWelcome && "hidden")}
         isReadonly={isReadonly}
+        suppressGreeting={suppressWelcome}
         status={status}
       />
     </>
@@ -125,6 +131,11 @@ function PureChatContent({
   const hasBranchSelectionContext =
     (activeBranch?.createdFromExcerpt?.trim().length ?? 0) > 0;
   const hasMessages = messageIds.length > 0 || hasBranchSelectionContext;
+  const suppressWelcome = Boolean(
+    activeBranch?.parentBranchId ||
+      activeBranch?.createdFromMessageId ||
+      hasBranchSelectionContext
+  );
 
   const allMessagesQuery = useQuery({
     queryKey: isShared
@@ -179,6 +190,7 @@ function PureChatContent({
       hasMessages={hasMessages}
       isReadonly={isReadonly}
       projectId={projectId}
+      suppressWelcome={suppressWelcome}
     />
   );
 
