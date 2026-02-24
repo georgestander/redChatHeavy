@@ -6,6 +6,15 @@ All notable changes to ChatJS are documented here.
 
 ## February 2026
 
+### 2026-02-24 08:53 UTC - PR #6: [codex] Sync root changelog with changelog automation
+
+- Added a root-level `CHANGELOG.md` as a first-class changelog surface for GitHub users.
+- Updated changelog merge automation to keep `CHANGELOG.md` and `docs/changelog.mdx` in sync.
+- Added README links to make changelog discovery explicit from the repo landing page.
+
+[View PR](https://github.com/georgestander/redChatHeavy/pull/6)
+<!-- changelog-pr:6 -->
+
 ### 2026-02-24 07:01 UTC - PR #5: [codex] Branching parity and local runtime stability
 
 - Fixed branching parity lint blockers and dependency issues so PR checks pass reliably.
