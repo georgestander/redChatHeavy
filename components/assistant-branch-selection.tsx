@@ -25,8 +25,8 @@ type SelectionState = {
   rect: DOMRect;
 };
 
-const BRANCH_POPOVER_WIDTH = 220;
 const BRANCH_POPOVER_HEIGHT = 40;
+const BRANCH_POPOVER_OFFSET = 8;
 
 function getElementFromNode(node: Node): Element | null {
   if (node.nodeType === Node.ELEMENT_NODE) {
@@ -34,6 +34,68 @@ function getElementFromNode(node: Node): Element | null {
   }
 
   return node.parentElement;
+}
+
+function cloneRect(rect: DOMRect | DOMRectReadOnly): DOMRect {
+  return new DOMRect(rect.x, rect.y, rect.width, rect.height);
+}
+
+function getSelectionAnchorRect(
+  selection: Selection,
+  range: Range
+): DOMRect | null {
+  const rects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.width > 0 || rect.height > 0
+  );
+
+  if (rects.length > 0) {
+    let selectedRect: DOMRect | DOMRectReadOnly = rects[rects.length - 1];
+
+    // Prefer a rect closest to the focus/caret point so the bubble appears where
+    // the user ended the selection rather than the center of a large multi-line box.
+    const focusNode = selection.focusNode;
+    if (focusNode) {
+      try {
+        const focusRange = document.createRange();
+        focusRange.setStart(focusNode, selection.focusOffset);
+        focusRange.collapse(true);
+        const focusRect =
+          focusRange.getClientRects().item(0) ??
+          focusRange.getBoundingClientRect();
+
+        if (focusRect && (focusRect.width > 0 || focusRect.height > 0)) {
+          const focusX = focusRect.left;
+          const focusY = focusRect.top;
+
+          selectedRect = rects.reduce((closest, rect) => {
+            const closestCenterX = closest.left + closest.width / 2;
+            const closestCenterY = closest.top + closest.height / 2;
+            const rectCenterX = rect.left + rect.width / 2;
+            const rectCenterY = rect.top + rect.height / 2;
+
+            const closestDistance =
+              Math.abs(closestCenterX - focusX) +
+              Math.abs(closestCenterY - focusY);
+            const rectDistance =
+              Math.abs(rectCenterX - focusX) + Math.abs(rectCenterY - focusY);
+
+            return rectDistance < closestDistance ? rect : closest;
+          });
+        }
+      } catch {
+        // Fallback to the last client rect when focus range can't be resolved.
+      }
+    }
+
+    return cloneRect(selectedRect);
+  }
+
+  const boundingRect = range.getBoundingClientRect();
+  if (boundingRect.width > 0 || boundingRect.height > 0) {
+    return cloneRect(boundingRect);
+  }
+
+  return null;
 }
 
 export function AssistantBranchSelection({
@@ -121,12 +183,7 @@ export function AssistantBranchSelection({
         ? computedSpan
         : null;
 
-    const primaryRect = range.getBoundingClientRect();
-    const fallbackRect = range.getClientRects().item(0);
-    const rect =
-      (primaryRect.width > 0 || primaryRect.height > 0
-        ? primaryRect
-        : fallbackRect) ?? null;
+    const rect = getSelectionAnchorRect(selected, range);
     if (!rect) {
       setSelection(null);
       return;
@@ -270,22 +327,22 @@ export function AssistantBranchSelection({
     const centerX = selection.rect.left + selection.rect.width / 2;
     const left = Math.max(
       8,
-      Math.min(
-        centerX - BRANCH_POPOVER_WIDTH / 2,
-        window.innerWidth - BRANCH_POPOVER_WIDTH - 8
-      )
+      Math.min(centerX, window.innerWidth - 8)
     );
 
     const canRenderBelow =
-      selection.rect.bottom + BRANCH_POPOVER_HEIGHT + 8 <= window.innerHeight;
+      selection.rect.bottom + BRANCH_POPOVER_HEIGHT + BRANCH_POPOVER_OFFSET <=
+      window.innerHeight;
     const top = canRenderBelow
-      ? selection.rect.bottom + 8
-      : Math.max(8, selection.rect.top - BRANCH_POPOVER_HEIGHT - 8);
+      ? selection.rect.bottom + BRANCH_POPOVER_OFFSET
+      : Math.max(
+          8,
+          selection.rect.top - BRANCH_POPOVER_HEIGHT - BRANCH_POPOVER_OFFSET
+        );
 
     return {
       top,
       left,
-      width: BRANCH_POPOVER_WIDTH,
     };
   }, [selection]);
 
@@ -298,11 +355,11 @@ export function AssistantBranchSelection({
 
       {selection && popoverStyle ? (
         <div
-          className="fixed z-50"
+          className="fixed z-50 -translate-x-1/2"
           style={{
             left: popoverStyle.left,
             top: popoverStyle.top,
-            width: popoverStyle.width,
+            maxWidth: "calc(100vw - 16px)",
           }}
         >
           <div className="flex items-center gap-1 rounded-md border bg-popover px-2 py-1.5 shadow-md">
