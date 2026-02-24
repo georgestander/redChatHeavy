@@ -7,31 +7,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'test-auth-secret' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432/chatjs' }}
+      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN || 'dummy-blob-token' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-openai-key' }}
+      FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY || 'dummy-firecrawl-key' }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY || 'dummy-tavily-key' }}
+      MCP_ENCRYPTION_KEY: ${{ secrets.MCP_ENCRYPTION_KEY || 'dummy-mcp-key' }}
+      VERCEL_OIDC_TOKEN: ${{ secrets.VERCEL_OIDC_TOKEN || 'dummy-oidc-token' }}
+      AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID || 'dummy-google-id' }}
+      AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET || 'dummy-google-secret' }}
+      AUTH_GITHUB_ID: ${{ secrets.AUTH_GITHUB_ID || 'dummy-github-id' }}
+      AUTH_GITHUB_SECRET: ${{ secrets.AUTH_GITHUB_SECRET || 'dummy-github-secret' }}
+      VERCEL_APP_CLIENT_ID: ${{ secrets.VERCEL_APP_CLIENT_ID || 'dummy-vercel-app-id' }}
+      VERCEL_APP_CLIENT_SECRET: ${{ secrets.VERCEL_APP_CLIENT_SECRET || 'dummy-vercel-app-secret' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
-      - uses: actions/cache@v3
+          version: 9.15.9
+      - uses: actions/setup-node@v4
         with:
-          path: |
-            ~/.bun
-            **/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: ${{ runner.os }}-bun-
-      - run: bun install --frozen-lockfile
+          node-version: 22
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
       - uses: actions/cache@v3
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/bun.lockb') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/pnpm-lock.yaml') }}
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: bunx playwright install --with-deps chromium
-      - run: bun run test
+        run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run test
       - uses: actions/upload-artifact@v4
         if: always() && !cancelled()
         with:
