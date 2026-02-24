@@ -5,6 +5,7 @@ import { uploadFile } from "@/lib/blob";
 import { config } from "@/lib/config";
 import type { CostAccumulator } from "@/lib/credits/cost-accumulator";
 import { createModuleLogger } from "@/lib/logger";
+import { toManagedAttachmentUrl } from "@/lib/utils/attachment-urls";
 import {
   type AnyImageModelId,
   isMultimodalImageModel,
@@ -24,7 +25,11 @@ const log = createModuleLogger("ai.tools.generate-image");
 type ImageMode = "edit" | "generate";
 
 async function fetchImageBuffer(url: string): Promise<Buffer> {
-  const response = await fetch(url);
+  const managedUrl = toManagedAttachmentUrl(url);
+  if (!managedUrl) {
+    throw new Error("Unsupported attachment URL for image editing.");
+  }
+  const response = await fetch(managedUrl);
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
@@ -192,13 +197,21 @@ async function runGenerateImageMultimodal({
   // Add reference images if in edit mode
   if (mode === "edit") {
     if (lastGeneratedImage) {
+      const managedUrl = toManagedAttachmentUrl(lastGeneratedImage.imageUrl);
+      if (!managedUrl) {
+        throw new Error("Unsupported image URL for editing.");
+      }
       userContent.push({
         type: "image",
-        image: new URL(lastGeneratedImage.imageUrl),
+        image: managedUrl,
       });
     }
     for (const part of imageParts) {
-      userContent.push({ type: "image", image: new URL(part.url) });
+      const managedUrl = toManagedAttachmentUrl(part.url);
+      if (!managedUrl) {
+        throw new Error("Unsupported attachment URL for image editing.");
+      }
+      userContent.push({ type: "image", image: managedUrl });
     }
   }
 

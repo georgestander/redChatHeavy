@@ -5,6 +5,7 @@ import type {
   ModelMessage,
   TextPart,
 } from "ai";
+import { toManagedAttachmentUrl } from "@/lib/utils/attachment-urls";
 
 // Minimal utilities to download assets from URL-based parts and inline them.
 
@@ -29,21 +30,6 @@ async function defaultDownload({ url }: { url: URL }): Promise<DownloadResult> {
   return { mediaType: contentType, data: new Uint8Array(arrayBuffer) };
 }
 
-function toHttpUrl(value: unknown): URL | null {
-  if (value instanceof URL) {
-    return value.protocol.startsWith("http") ? value : null;
-  }
-  if (typeof value === "string") {
-    try {
-      const url = new URL(value);
-      return url.protocol === "http:" || url.protocol === "https:" ? url : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
 /**
  * Collects all http(s) URLs from file/image parts in the provided messages and downloads them.
  * Returns a map keyed by the normalized URL string.
@@ -66,7 +52,7 @@ async function downloadAssetsFromModelMessages(
         part.type === "file"
           ? (part as FilePart).data
           : (part as ImagePart).image;
-      const url = toHttpUrl(dataOrUrl);
+      const url = toManagedAttachmentUrl(dataOrUrl);
       if (url) {
         urlSet.add(url.toString());
       }
@@ -89,7 +75,7 @@ function mapFilePart(
   part: FilePart,
   downloaded: Record<string, DownloadResult>
 ): FilePart {
-  const url = toHttpUrl(part.data);
+  const url = toManagedAttachmentUrl(part.data);
   if (url) {
     const found = downloaded[url.toString()];
     if (found) {
@@ -107,7 +93,7 @@ function mapImagePart(
   part: ImagePart,
   downloaded: Record<string, DownloadResult>
 ): ImagePart {
-  const url = toHttpUrl(part.image);
+  const url = toManagedAttachmentUrl(part.image);
   if (url) {
     const found = downloaded[url.toString()];
     if (found) {

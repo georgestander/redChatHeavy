@@ -2,6 +2,7 @@ import type { FileUIPart } from "ai";
 import type { ChatMessage } from "./ai/types";
 import { uploadFile } from "./blob";
 import { BLOB_FILE_PREFIX } from "./constants";
+import { isManagedAttachmentUrl } from "./utils/attachment-urls";
 import { generateUUID } from "./utils";
 
 function cloneMessages<
@@ -288,23 +289,6 @@ async function cloneFileUIPart(part: FileUIPart): Promise<FileUIPart> {
     console.error("Failed to clone attachment:", error);
     // Return original attachment as fallback to avoid breaking the cloning process
     return part;
-  }
-}
-
-function isManagedAttachmentUrl(url: string): boolean {
-  if (url.startsWith("/api/files/")) {
-    return true;
-  }
-
-  if (url.includes("blob.vercel-storage.com")) {
-    return true;
-  }
-
-  try {
-    const parsed = new URL(url);
-    return parsed.pathname.startsWith("/api/files/");
-  } catch {
-    return false;
   }
 }
 
