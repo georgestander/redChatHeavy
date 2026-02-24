@@ -62,31 +62,12 @@ export const withThreads =
         }));
       },
 
-      // Override setMessages to bump epoch only when thread shape changes in
-      // stable UI states. During "submitted"/"streaming", remounting ChatSync
-      // can drop the active request before tokens render.
+      // Override setMessages to avoid implicit ChatSync remounts.
+      // Regular chat updates (optimistic user send, stream deltas, retries,
+      // edits) should not rotate threadEpoch; explicit thread switches should
+      // go through setMessagesWithEpoch instead.
       setMessages: (messages: UI_MESSAGE[]) => {
-        const status = get().status;
-        const shouldTrackThreadShift = status === "ready" || status === "error";
-
-        if (!shouldTrackThreadShift) {
-          originalSetMessages(messages);
-          return;
-        }
-
-        const currentMessages = get().messages;
-        const currentIds = currentMessages.map((m) => m.id).join(",");
-        const newIds = messages.map((m) => m.id).join(",");
-
         originalSetMessages(messages);
-
-        // Only bump epoch if the thread structure actually changed
-        if (currentIds !== newIds) {
-          set((state) => ({
-            ...state,
-            threadEpoch: state.threadEpoch + 1,
-          }));
-        }
       },
     };
   };

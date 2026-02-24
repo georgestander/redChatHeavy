@@ -45,11 +45,29 @@ describe("withThreads", () => {
     expect(store.getState().threadEpoch).toBe(before);
   });
 
-  it("bumps threadEpoch when ready and thread IDs change", () => {
+  it("does not bump threadEpoch when ready and messages change", () => {
     const store = createTestStore("ready");
     const before = store.getState().threadEpoch;
 
     store.getState().setMessages([message("m1"), message("m2")]);
+
+    expect(store.getState().threadEpoch).toBe(before);
+  });
+
+  it("does not bump threadEpoch when error and messages change", () => {
+    const store = createTestStore("error");
+    const before = store.getState().threadEpoch;
+
+    store.getState().setMessages([message("m1"), message("m2")]);
+
+    expect(store.getState().threadEpoch).toBe(before);
+  });
+
+  it("bumps threadEpoch via explicit setMessagesWithEpoch", () => {
+    const store = createTestStore("ready");
+    const before = store.getState().threadEpoch;
+
+    store.getState().setMessagesWithEpoch([message("m1"), message("m2")]);
 
     expect(store.getState().threadEpoch).toBe(before + 1);
   });
