@@ -4,6 +4,7 @@ import { ChevronDown, ExternalLink, Globe, TextIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Image from "@/components/image";
 import type { ChatMessage } from "@/lib/ai/types";
+import { sanitizeExternalUrl } from "@/lib/utils/safe-url";
 
 export type RetrieveUrlTool = Extract<
   ChatMessage["parts"][number],
@@ -71,6 +72,7 @@ function RetrievedContentHeader({ firstItem }: { firstItem: unknown }) {
     "No description available"
   );
   const language = getItemProperty(firstItem, "language", "Unknown");
+  const safeUrl = sanitizeExternalUrl(url);
 
   return (
     <div className="p-4">
@@ -98,7 +100,8 @@ function RetrievedContentHeader({ firstItem }: { firstItem: unknown }) {
             </span>
             <a
               className="inline-flex items-center gap-1.5 text-neutral-500 text-xs transition-colors hover:text-primary"
-              href={url || "#"}
+              href={safeUrl ?? "#"}
+              aria-disabled={!safeUrl}
               rel="noopener noreferrer"
               target="_blank"
             >
