@@ -6,6 +6,10 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
+import {
+  createBranchTextHighlightsRehypePlugin,
+  type BranchTextHighlight,
+} from "@/lib/branching/text-highlights";
 import { cn } from "@/lib/utils";
 
 type StreamdownLiteProps = Omit<ComponentProps<typeof ReactMarkdown>, "children"> & {
@@ -13,6 +17,7 @@ type StreamdownLiteProps = Omit<ComponentProps<typeof ReactMarkdown>, "children"
   className?: string;
   isAnimating?: boolean;
   mode?: "static" | "streaming";
+  textHighlights?: BranchTextHighlight[];
 };
 
 function normalizeCollapsedPipeTables(markdown: string): string {
@@ -40,6 +45,8 @@ export function StreamdownLite({
   components,
   mode = "static",
   remarkPlugins,
+  rehypePlugins,
+  textHighlights,
   ...props
 }: StreamdownLiteProps) {
   const markdownComponents = useMemo(() => {
@@ -128,6 +135,16 @@ export function StreamdownLite({
     [remarkPlugins]
   );
 
+  const mergedRehypePlugins = useMemo(() => {
+    const plugins = [...(rehypePlugins ?? [])];
+
+    if (textHighlights && textHighlights.length > 0) {
+      plugins.push(createBranchTextHighlightsRehypePlugin(textHighlights));
+    }
+
+    return plugins;
+  }, [rehypePlugins, textHighlights]);
+
   const normalizedChildren = useMemo(
     () => normalizeCollapsedPipeTables(children ?? ""),
     [children]
@@ -137,6 +154,7 @@ export function StreamdownLite({
     <div className={cn(className)}>
       <ReactMarkdown
         components={markdownComponents}
+        rehypePlugins={mergedRehypePlugins}
         remarkPlugins={mergedRemarkPlugins}
         {...props}
       >

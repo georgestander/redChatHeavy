@@ -16,7 +16,12 @@ export const Response = memo(
       {...props}
     />
   ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children
+  (prevProps, nextProps) =>
+    prevProps.children === nextProps.children &&
+    prevProps.className === nextProps.className &&
+    prevProps.mode === nextProps.mode &&
+    prevProps.isAnimating === nextProps.isAnimating &&
+    prevProps.textHighlights === nextProps.textHighlights
 );
 
 Response.displayName = "Response";

@@ -3,6 +3,7 @@
 import { useChatStoreApi } from "@ai-sdk-tools/store";
 import { GitBranchPlus, X } from "lucide-react";
 import {
+  type MouseEvent,
   type PropsWithChildren,
   useCallback,
   useEffect,
@@ -315,6 +316,48 @@ export function AssistantBranchSelection({
     storeApi,
   ]);
 
+  const handlePersistedBranchHighlightClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target =
+        event.target instanceof Element ? event.target : null;
+      if (!target) {
+        return;
+      }
+
+      const highlight = target.closest<HTMLElement>("mark[data-branch-id]");
+      if (!highlight || !containerRef.current?.contains(highlight)) {
+        return;
+      }
+
+      const selectedText = window.getSelection()?.toString().trim() ?? "";
+      if (selectedText.length > 0) {
+        return;
+      }
+
+      const branchId = highlight.dataset.branchId?.trim();
+      if (!branchId) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (branchId !== activeBranchId) {
+        setActiveBranchId(branchId, { history: "push" });
+      }
+
+      setCompareMode(true, { history: "replace" });
+      setCompareSheetOpen(true);
+      setSelection(null);
+    },
+    [
+      activeBranchId,
+      setActiveBranchId,
+      setCompareMode,
+      setCompareSheetOpen,
+    ]
+  );
+
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -386,6 +429,7 @@ export function AssistantBranchSelection({
   return (
     <div
       className={cn("relative", className)}
+      onClickCapture={handlePersistedBranchHighlightClick}
       ref={containerRef}
     >
       {children}
