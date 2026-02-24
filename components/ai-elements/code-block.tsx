@@ -58,17 +58,25 @@ export async function highlightCode(
     ? [lineNumberTransformer]
     : [];
 
+  const toHtmlWithFallback = async (theme: "one-light" | "one-dark-pro") => {
+    try {
+      return await codeToHtml(code, {
+        lang: language,
+        theme,
+        transformers,
+      });
+    } catch {
+      return await codeToHtml(code, {
+        lang: "plaintext",
+        theme,
+        transformers,
+      });
+    }
+  };
+
   return await Promise.all([
-    codeToHtml(code, {
-      lang: language,
-      theme: "one-light",
-      transformers,
-    }),
-    codeToHtml(code, {
-      lang: language,
-      theme: "one-dark-pro",
-      transformers,
-    }),
+    toHtmlWithFallback("one-light"),
+    toHtmlWithFallback("one-dark-pro"),
   ]);
 }
 
