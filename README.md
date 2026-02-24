@@ -6,6 +6,9 @@
 
 **A full-stack AI chat application replatformed from Next.js/Vercel to RedwoodSDK on Cloudflare Workers.**
 
+- Changelog (root): [CHANGELOG.md](CHANGELOG.md)
+- Changelog (docs): [docs/changelog.mdx](docs/changelog.mdx)
+
 Durable Objects for resumable streaming · KV for cache and rate limiting · R2 for file storage · Better Auth · AI Gateway · Drizzle/Postgres
 
 ---

@@ -110,7 +110,14 @@ jobs:
             core.info(`Collected ${entries.length} changelog entries from merged PRs.`);
             core.setOutput("entries", JSON.stringify(entries));
 
-      - name: Update changelog file
+      - name: Update root changelog
+        if: steps.collect.outputs.entries != '[]'
+        run: node scripts/update-changelog-from-prs.mjs
+        env:
+          CHANGELOG_FILE: CHANGELOG.md
+          CHANGELOG_ENTRIES_JSON: ${{ steps.collect.outputs.entries }}
+
+      - name: Update docs changelog
         if: steps.collect.outputs.entries != '[]'
         run: node scripts/update-changelog-from-prs.mjs
         env:
@@ -120,13 +127,13 @@ jobs:
       - name: Commit and push changelog update
         if: steps.collect.outputs.entries != '[]'
         run: |
-          if git diff --quiet -- docs/changelog.mdx; then
+          if git diff --quiet -- CHANGELOG.md docs/changelog.mdx; then
             echo "No changelog content changes to commit."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/changelog.mdx
+          git add CHANGELOG.md docs/changelog.mdx
           git commit -m "docs: update changelog from merged pull requests [skip ci]"
           git push
