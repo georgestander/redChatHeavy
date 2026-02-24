@@ -4,12 +4,33 @@ import { useEffect, useMemo, useState } from "react";
 import { navigate } from "rwsdk/client";
 
 const NAVIGATION_EVENT = "rw:navigation";
+let historyListenersPatched = false;
 
 function notifyNavigation() {
   if (typeof window === "undefined") {
     return;
   }
   window.dispatchEvent(new Event(NAVIGATION_EVENT));
+}
+
+function patchHistoryListeners() {
+  if (typeof window === "undefined" || historyListenersPatched) {
+    return;
+  }
+
+  historyListenersPatched = true;
+  const originalPushState = window.history.pushState.bind(window.history);
+  const originalReplaceState = window.history.replaceState.bind(window.history);
+
+  window.history.pushState = (...args) => {
+    originalPushState(...args);
+    notifyNavigation();
+  };
+
+  window.history.replaceState = (...args) => {
+    originalReplaceState(...args);
+    notifyNavigation();
+  };
 }
 
 function getPathname() {
@@ -30,6 +51,7 @@ export function usePathname() {
   const [pathname, setPathname] = useState(getPathname);
 
   useEffect(() => {
+    patchHistoryListeners();
     const handleChange = () => setPathname(getPathname());
     window.addEventListener("popstate", handleChange);
     window.addEventListener(NAVIGATION_EVENT, handleChange);
@@ -46,6 +68,7 @@ export function useSearchParams() {
   const [search, setSearch] = useState(getSearch);
 
   useEffect(() => {
+    patchHistoryListeners();
     const handleChange = () => setSearch(getSearch());
     window.addEventListener("popstate", handleChange);
     window.addEventListener(NAVIGATION_EVENT, handleChange);

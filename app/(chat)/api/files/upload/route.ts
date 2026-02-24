@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import { extractFilenameFromUrl, uploadFile } from "@/lib/blob";
 import { config } from "@/lib/config";
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getServerSession(await headers());
 
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

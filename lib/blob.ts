@@ -190,7 +190,9 @@ function getR2BucketBinding(): Promise<R2BucketLike | null> {
 
     try {
       const moduleName = "cloudflare:workers";
-      const workersModule = (await import(moduleName)) as {
+      const workersModule = (await import(
+        /* @vite-ignore */ moduleName
+      )) as {
         env?: {
           R2_ATTACHMENTS?: R2BucketLike;
         };

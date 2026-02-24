@@ -6,7 +6,7 @@ import {
   usePinChat,
   useRenameChat,
 } from "@/hooks/chat-sync-hooks";
-import { usePathname } from "@/hooks/use-navigation";
+import { usePathname, useSearchParams } from "@/hooks/use-navigation";
 import type { UIChat } from "@/lib/types/ui-chat";
 import { parseChatIdFromPathname } from "@/providers/parse-chat-id-from-pathname";
 import { DeleteChatDialog } from "./delete-chat-dialog";
@@ -24,12 +24,15 @@ type GroupedChats = {
 
 export function SidebarChatsList() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: allChats, isLoading } = useGetAllChats({ limit: 50 });
   const { setOpenMobile } = useSidebar();
   const { mutate: renameChatMutation } = useRenameChat();
   const { mutate: pinChatMutation } = usePinChat();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const activeBranchId = searchParams.get("branch");
+  const compareMode = searchParams.get("compare") === "1";
 
   // Filter chats: non-project chats only (projectId == null)
   const chats = useMemo(
@@ -144,6 +147,8 @@ export function SidebarChatsList() {
               }}
               prefetch={shouldPrefetchNextChat()}
               setOpenMobile={setOpenMobile}
+              activeBranchId={activeBranchId}
+              compareMode={compareMode}
             />
           ))}
         </>
@@ -173,6 +178,8 @@ export function SidebarChatsList() {
               }}
               prefetch={shouldPrefetchNextChat()}
               setOpenMobile={setOpenMobile}
+              activeBranchId={activeBranchId}
+              compareMode={compareMode}
             />
           ))}
         </>
@@ -200,6 +207,8 @@ export function SidebarChatsList() {
               }}
               prefetch={shouldPrefetchNextChat()}
               setOpenMobile={setOpenMobile}
+              activeBranchId={activeBranchId}
+              compareMode={compareMode}
             />
           ))}
         </>
@@ -227,6 +236,8 @@ export function SidebarChatsList() {
               }}
               prefetch={shouldPrefetchNextChat()}
               setOpenMobile={setOpenMobile}
+              activeBranchId={activeBranchId}
+              compareMode={compareMode}
             />
           ))}
         </>
@@ -254,6 +265,8 @@ export function SidebarChatsList() {
               }}
               prefetch={shouldPrefetchNextChat()}
               setOpenMobile={setOpenMobile}
+              activeBranchId={activeBranchId}
+              compareMode={compareMode}
             />
           ))}
         </>
@@ -281,6 +294,8 @@ export function SidebarChatsList() {
               }}
               prefetch={shouldPrefetchNextChat()}
               setOpenMobile={setOpenMobile}
+              activeBranchId={activeBranchId}
+              compareMode={compareMode}
             />
           ))}
         </>

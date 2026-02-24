@@ -100,6 +100,41 @@ export const chat = pgTable("Chat", {
 
 export type Chat = InferSelectModel<typeof chat>;
 
+export const chatBranch = pgTable(
+  "ChatBranch",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    chatId: uuid("chatId")
+      .notNull()
+      .references(() => chat.id, {
+        onDelete: "cascade",
+      }),
+    parentBranchId: uuid("parentBranchId"),
+    title: text("title").notNull().default("New Branch"),
+    createdFromMessageId: uuid("createdFromMessageId"),
+    createdFromStart: integer("createdFromStart"),
+    createdFromEnd: integer("createdFromEnd"),
+    createdFromExcerpt: text("createdFromExcerpt"),
+    headMessageId: uuid("headMessageId"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    archivedAt: timestamp("archivedAt"),
+  },
+  (table) => ({
+    ChatBranch_chat_id_idx: index("ChatBranch_chat_id_idx").on(table.chatId),
+    ChatBranch_parent_branch_id_idx: index(
+      "ChatBranch_parent_branch_id_idx"
+    ).on(table.parentBranchId),
+    ChatBranch_created_from_message_id_idx: index(
+      "ChatBranch_created_from_message_id_idx"
+    ).on(table.createdFromMessageId),
+    ChatBranch_head_message_id_idx: index("ChatBranch_head_message_id_idx").on(
+      table.headMessageId
+    ),
+  })
+);
+
+export type ChatBranch = InferSelectModel<typeof chatBranch>;
+
 export const message = pgTable("Message", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   chatId: uuid("chatId")
@@ -107,6 +142,9 @@ export const message = pgTable("Message", {
     .references(() => chat.id, {
       onDelete: "cascade",
     }),
+  branchId: uuid("branchId").references(() => chatBranch.id, {
+    onDelete: "set null",
+  }),
   parentMessageId: uuid("parentMessageId"),
   role: varchar("role").notNull(),
   // parts column removed - parts are now stored in Part table

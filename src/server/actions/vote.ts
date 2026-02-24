@@ -1,7 +1,7 @@
 "use server";
 
 import { requestInfo } from "rwsdk/worker";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import {
   getChatById,
   getVotesByChatId,
@@ -13,9 +13,7 @@ import {
 } from "@/lib/schemas/vote";
 
 async function requireUserId() {
-  const session = await auth.api.getSession({
-    headers: requestInfo.request.headers,
-  });
+  const session = await getServerSession(requestInfo.request.headers);
   const userId = session?.user?.id;
   if (!userId) {
     throw new Error("UNAUTHORIZED");
@@ -24,20 +22,21 @@ async function requireUserId() {
 }
 
 export async function getVotes(input: unknown) {
-  const userId = await requireUserId();
-  const parsed = getVotesInputSchema.parse(input);
+  try {
+    const userId = await requireUserId();
+    const parsed = getVotesInputSchema.parse(input);
 
-  const chat = await getChatById({ id: parsed.chatId });
+    const chat = await getChatById({ id: parsed.chatId });
 
-  if (!chat) {
-    throw new Error("Chat not found");
+    if (!chat || chat.userId !== userId) {
+      return [];
+    }
+
+    return await getVotesByChatId({ id: parsed.chatId });
+  } catch (error) {
+    console.error("Failed to load votes", error);
+    return [];
   }
-
-  if (chat.userId !== userId) {
-    throw new Error("UNAUTHORIZED");
-  }
-
-  return await getVotesByChatId({ id: parsed.chatId });
 }
 
 export async function voteMessage(input: unknown) {

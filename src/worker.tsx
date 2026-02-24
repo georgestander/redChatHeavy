@@ -25,7 +25,11 @@ import SettingsModelsPage from "@/app/pages/settings/models";
 import { SharePage } from "@/app/pages/share";
 import TermsPage from "@/app/pages/terms";
 import { StreamBufferDO as StreamBufferDOClass } from "@/durable-objects/stream-buffer-do";
-import { auth } from "@/lib/auth";
+import {
+  auth,
+  getServerSession,
+  isDevLocalAuthRuntime,
+} from "@/lib/auth";
 import {
   deleteFilesByUrls,
   extractFilenameFromUrl,
@@ -88,8 +92,20 @@ function redirectTo(pathname: string, request: Request): Response {
   return Response.redirect(new URL(pathname, request.url), 302);
 }
 
+function redirectToDevLogin(request: Request): Response {
+  const requestUrl = new URL(request.url);
+  const next = `${requestUrl.pathname}${requestUrl.search}`;
+  const devLoginUrl = new URL("/api/dev-login", request.url);
+  devLoginUrl.searchParams.set("next", next);
+  return Response.redirect(devLoginUrl, 302);
+}
+
 function methodNotAllowed(): Response {
   return new Response("Method Not Allowed", { status: 405 });
+}
+
+function isAuthSessionRoute(pathname: string): boolean {
+  return pathname === "/api/auth/get-session" || pathname === "/api/auth/session";
 }
 
 type R2HttpMetadata = {
@@ -340,7 +356,7 @@ async function handleFileUploadRoute({
 }
 
 async function getSessionUserId(request: Request): Promise<string | null> {
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await getServerSession(request.headers);
   return session?.user?.id ?? null;
 }
 
@@ -601,7 +617,7 @@ function NotFoundPage() {
 
 export default defineApp<AppRequestInfo>([
   async function sessionMiddleware({ request, ctx }) {
-    ctx.session = await auth.api.getSession({ headers: request.headers });
+    ctx.session = await getServerSession(request.headers);
   },
   function authGate({ request, ctx }) {
     const { pathname } = new URL(request.url);
@@ -637,10 +653,33 @@ export default defineApp<AppRequestInfo>([
     }
 
     if (!isLoggedIn) {
+      if (process.env.NODE_ENV === "development" && isDevLocalAuthRuntime()) {
+        return redirectToDevLogin(request);
+      }
+
       return redirectTo("/login", request);
     }
   },
-  route("/api/auth/*", ({ request }) => auth.handler(request)),
+  route("/api/auth/*", async ({ request }) => {
+    if (request.method === "GET") {
+      const { pathname } = new URL(request.url);
+      if (isAuthSessionRoute(pathname)) {
+        try {
+          return Response.json(await getServerSession(request.headers));
+        } catch (error) {
+          if (isDevLocalAuthRuntime()) {
+            console.warn(
+              "[auth] session route failed in local runtime; returning null session",
+              error
+            );
+            return Response.json(null);
+          }
+          throw error;
+        }
+      }
+    }
+    return auth.handler(request);
+  }),
   prefix("/api", [
     route("/chat", ({ request }) =>
       request.method === "POST" ? handleChatRoute(request) : methodNotAllowed()
@@ -674,7 +713,9 @@ export default defineApp<AppRequestInfo>([
     ),
     route("/cron/cleanup", ({ request }) => handleCleanupRoute(request)),
     route("/dev-login", ({ request }) =>
-      request.method === "GET" ? handleDevLoginRequest() : methodNotAllowed()
+      request.method === "GET"
+        ? handleDevLoginRequest(request)
+        : methodNotAllowed()
     ),
   ]),
   route("/sitemap.xml", ({ request }) => sitemapResponse(request)),

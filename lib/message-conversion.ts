@@ -28,6 +28,7 @@ function _dbMessageToChatMessage(message: DBMessage): ChatMessage {
     metadata: {
       createdAt: message.createdAt,
       activeStreamId: message.activeStreamId,
+      branchId: message.branchId ?? null,
       parentMessageId: message.parentMessageId,
       selectedModel: (message.selectedModel as ModelId) || ("" as ModelId),
       selectedTool: (message.selectedTool as UiToolName | null) || undefined,
@@ -41,6 +42,7 @@ export function chatMessageToDbMessage(
   chatId: string
 ): DBMessage {
   const parentMessageId = message.metadata.parentMessageId || null;
+  const branchId = message.metadata.branchId || null;
   const selectedModel = message.metadata.selectedModel;
 
   // Ensure createdAt is a Date object
@@ -63,6 +65,7 @@ export function chatMessageToDbMessage(
     lastContext: message.metadata?.usage || null,
     createdAt,
     annotations: [],
+    branchId,
     parentMessageId,
     selectedModel,
     selectedTool: message.metadata?.selectedTool || null,

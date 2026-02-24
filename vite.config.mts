@@ -78,20 +78,21 @@ async function collectForceClientPaths(): Promise<string[]> {
 
 export default defineConfig(async () => {
   const forceClientPaths = await collectForceClientPaths();
+  const excludedOptimizeDeps = ["antd", "antd/es/mentions"];
 
   return {
     optimizeDeps: {
-      exclude: ["antd", "antd/es/mentions"],
+      exclude: excludedOptimizeDeps,
     },
     environments: {
       worker: {
         optimizeDeps: {
-          exclude: ["antd", "antd/es/mentions"],
+          exclude: excludedOptimizeDeps,
         },
       },
       ssr: {
         optimizeDeps: {
-          exclude: ["antd", "antd/es/mentions"],
+          exclude: excludedOptimizeDeps,
         },
       },
     },

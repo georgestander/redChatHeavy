@@ -2,6 +2,10 @@
 # Wrapper that uses branch DATABASE_URL if .neon-branch exists, otherwise uses .env.local
 set -e
 
+if [ "${CHATJS_LOCAL_MODE:-0}" = "1" ]; then
+  exec "$@"
+fi
+
 BRANCH_FILE=".neon-branch"
 
 if [ -f "$BRANCH_FILE" ]; then

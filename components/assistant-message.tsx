@@ -3,6 +3,7 @@ import { useChatId, useChatStatus } from "@ai-sdk-tools/store";
 import { memo } from "react";
 import { useMessageMetadataById } from "@/lib/stores/hooks-base";
 import { Message, MessageContent } from "./ai-elements/message";
+import { AssistantBranchSelection } from "./assistant-branch-selection";
 import { FollowUpSuggestionsParts } from "./followup-suggestions";
 import { MessageActions } from "./message-actions";
 import { MessageParts } from "./message-parts";
@@ -29,11 +30,13 @@ const PureAssistantMessage = ({
     <Message className="w-full max-w-full items-start py-1" from="assistant">
       <MessageContent className="w-full px-0 py-0 text-left">
         <PartialMessageLoading messageId={messageId} />
-        <MessageParts
-          isLoading={isLoading}
-          isReadonly={isReadonly}
-          messageId={messageId}
-        />
+        <AssistantBranchSelection isReadonly={isReadonly} messageId={messageId}>
+          <MessageParts
+            isLoading={isLoading}
+            isReadonly={isReadonly}
+            messageId={messageId}
+          />
+        </AssistantBranchSelection>
 
         <SourcesAnnotations
           key={`sources-annotations-${messageId}`}

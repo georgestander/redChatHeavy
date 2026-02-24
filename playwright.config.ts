@@ -1,4 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Read environment variables from file.
@@ -18,6 +20,47 @@ const PORT = process.env.PORT || 5173;
  * of the WebServer respecting the correct set port
  */
 const baseURL = `http://localhost:${PORT}`;
+
+const configuredTestPatterns = [
+  /auth\.setup\.ts$/,
+  /reasoning\.setup\.ts$/,
+  /chat\.test\.ts$/,
+  /reasoning\.test\.ts$/,
+  /artifacts\.test\.ts$/,
+];
+
+function hasConfiguredPlaywrightTests(dir: string): boolean {
+  const entries = readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const absolutePath = join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      if (hasConfiguredPlaywrightTests(absolutePath)) {
+        return true;
+      }
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    if (configuredTestPatterns.some((pattern) => pattern.test(absolutePath))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+const shouldStartWebServer = (() => {
+  try {
+    return statSync("./tests").isDirectory() && hasConfiguredPlaywrightTests("./tests");
+  } catch {
+    return false;
+  }
+})();
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -124,10 +167,12 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: "pnpm dev -- --force",
-    url: baseURL,
-    timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: shouldStartWebServer
+    ? {
+        command: "pnpm dev -- --force",
+        url: baseURL,
+        timeout: 120 * 1000,
+        reuseExistingServer: !process.env.CI,
+      }
+    : undefined,
 });

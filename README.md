@@ -48,7 +48,31 @@ This migration was executed using Codex as an implementation accelerator. I desi
 
 I wrote about this (with the help of Codex) approach and the tradeoffs in [AUTHORSHIP.md](AUTHORSHIP.md).
 
-## Getting Started
+## One-Command Local Mode
+
+```bash
+pnpm install
+pnpm local
+```
+
+`pnpm local` does all of the following:
+
+- Starts local Postgres in Docker (`docker-compose.local.yml`)
+- Waits for DB readiness
+- Runs Drizzle migrations
+- Starts the app in local mode with automatic dev login (no signup required)
+
+Local chat/project/settings data persists in the Docker volume `chatjs_local_postgres_data`.
+
+```bash
+pnpm local:db:status
+pnpm local:db:down
+pnpm local:db:reset
+```
+
+`local:db:reset` is destructive and clears all local chat data.
+
+## Getting Started (Existing Workflow)
 
 ```bash
 pnpm install

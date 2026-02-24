@@ -7,15 +7,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
-      - uses: actions/cache@v3
+          version: 9.15.9
+      - uses: actions/setup-node@v4
         with:
-          path: |
-            ~/.bun
-            **/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: ${{ runner.os }}-bun-
-      - run: bun install --frozen-lockfile
-      - run: bun test:types
+          node-version: 20
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:types

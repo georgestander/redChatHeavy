@@ -2,7 +2,13 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { useChatActions, useChatStoreApi } from "@ai-sdk-tools/store";
 import { useMutation } from "@tanstack/react-query";
-import { CameraIcon, FileIcon, ImageIcon, PlusIcon } from "lucide-react";
+import {
+  CameraIcon,
+  FileIcon,
+  ImageIcon,
+  PlusIcon,
+  TextQuote,
+} from "lucide-react";
 import type React from "react";
 import {
   type ChangeEvent,
@@ -20,6 +26,7 @@ import {
   PromptInput,
   PromptInputButton,
   PromptInputFooter,
+  PromptInputHeader,
   PromptInputSubmit,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
@@ -35,6 +42,7 @@ import { processFilesForUpload } from "@/lib/files/upload-prep";
 import { useLastMessageId } from "@/lib/stores/hooks-base";
 import { ANONYMOUS_LIMITS } from "@/lib/types/anonymous";
 import { cn, generateUUID } from "@/lib/utils";
+import { useBranchState } from "@/providers/branch-state-provider";
 import { useChatId } from "@/providers/chat-id-provider";
 import { useChatInput } from "@/providers/chat-input-provider";
 import { useChatModels } from "@/providers/chat-models-provider";
@@ -97,6 +105,7 @@ function PureMultimodalInput({
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
   const isMobile = useIsMobile();
+  const { activeBranch } = useBranchState();
   const { mutate: saveChatMessage } = useSaveMessageMutation();
   useChatId();
   const {
@@ -111,6 +120,7 @@ function PureMultimodalInput({
     setSelectedTool,
     attachments,
     setAttachments,
+    activeBranchId,
     selectedModelId,
     handleModelChange,
     getInputValue,
@@ -344,6 +354,7 @@ function PureMultimodalInput({
       metadata: {
         createdAt: new Date(),
         parentMessageId: effectiveParentMessageId,
+        branchId: activeBranchId ?? null,
         selectedModel: selectedModelId,
         activeStreamId: null,
         selectedTool: selectedTool || undefined,
@@ -371,6 +382,7 @@ function PureMultimodalInput({
     saveChatMessage,
     parentMessageId,
     selectedModelId,
+    activeBranchId,
     editorRef,
     lastMessageId,
     onSendMessage,
@@ -576,6 +588,24 @@ function PureMultimodalInput({
     stopHelper?.();
   }, [lastMessageId, session?.user, stopHelper, stopStreamMutation]);
 
+  const branchSelectionContextLabel = useMemo(() => {
+    const excerpt = activeBranch?.createdFromExcerpt?.trim() ?? "";
+    if (!excerpt) {
+      return null;
+    }
+
+    const normalized = excerpt.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    if (normalized.length <= 140) {
+      return normalized;
+    }
+
+    return `${normalized.slice(0, 140).trimEnd()}...`;
+  }, [activeBranch?.createdFromExcerpt]);
+
   return (
     <div className="relative">
       {attachmentsEnabled && (
@@ -626,6 +656,25 @@ function PureMultimodalInput({
               forceVariant={isModelDisallowedForAnonymous ? "model" : "credits"}
             />
           )}
+
+          {branchSelectionContextLabel ? (
+            <PromptInputHeader className="w-full border-b bg-muted px-3 py-2">
+              <div
+                className="flex min-w-0 items-start gap-2"
+                title={`From highlighted text: "${branchSelectionContextLabel}"`}
+              >
+                <TextQuote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    From highlighted text
+                  </p>
+                  <p className="truncate text-xs font-semibold text-foreground">
+                    "{branchSelectionContextLabel}"
+                  </p>
+                </div>
+              </div>
+            </PromptInputHeader>
+          ) : null}
 
           <ContextBar
             attachments={attachments}

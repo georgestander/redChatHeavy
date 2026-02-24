@@ -368,6 +368,7 @@ export function cloneMessagesWithDocuments<
     parts: ChatMessage["parts"];
     metadata?: {
       parentMessageId: string | null;
+      branchId?: string | null;
     } & Record<string, unknown>;
   },
   TDocument extends {
@@ -419,6 +420,7 @@ export function cloneMessagesWithDocuments<
           metadata: {
             ...clonedMessage.metadata,
             parentMessageId: null,
+            branchId: null,
           },
         };
       }
@@ -439,6 +441,7 @@ export function cloneMessagesWithDocuments<
         metadata: {
           ...existingMetadata,
           parentMessageId: newMetadataParentId,
+          branchId: null,
         },
       };
     }

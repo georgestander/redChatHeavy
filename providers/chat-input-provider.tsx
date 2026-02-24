@@ -23,6 +23,7 @@ type ChatInputContextType = {
   setSelectedTool: Dispatch<SetStateAction<UiToolName | null>>;
   attachments: Attachment[];
   setAttachments: Dispatch<SetStateAction<Attachment[]>>;
+  activeBranchId: string | null;
   selectedModelId: AppModelId;
   handleModelChange: (modelId: AppModelId) => Promise<void>;
   getInputValue: () => string;
@@ -45,6 +46,7 @@ type ChatInputProviderProps = {
   overrideModelId?: AppModelId; // For message editing where we want to use the original model
   localStorageEnabled?: boolean;
   isProjectContext?: boolean;
+  activeBranchId?: string | null;
 };
 
 export function ChatInputProvider({
@@ -55,6 +57,7 @@ export function ChatInputProvider({
   overrideModelId,
   localStorageEnabled = true,
   isProjectContext = false,
+  activeBranchId = null,
 }: ChatInputProviderProps) {
   const [hasHydrated, setHasHydrated] = useState(false);
 
@@ -206,6 +209,7 @@ export function ChatInputProvider({
         setSelectedTool,
         attachments,
         setAttachments,
+        activeBranchId,
         selectedModelId,
         handleModelChange,
         getInputValue,

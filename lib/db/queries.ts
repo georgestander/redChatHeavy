@@ -29,7 +29,7 @@ import {
   mapUIMessagePartsToDBParts,
 } from "@/lib/utils/message-mapping";
 import type { ArtifactKind } from "../artifacts/artifact-kind";
-import { db } from "./client";
+import { db, isLocalDbRuntime } from "./client";
 import {
   chat,
   type DBMessage,
@@ -318,6 +318,21 @@ export async function saveMessage({
   message: ChatMessage;
 }) {
   try {
+    if (isLocalDbRuntime) {
+      const dbMessage = chatMessageToDbMessage(chatMessage, chatId);
+      dbMessage.id = id;
+
+      await db.insert(message).values(dbMessage);
+
+      const mappedDBParts = mapUIMessagePartsToDBParts(chatMessage.parts, id);
+      if (mappedDBParts.length > 0) {
+        await db.insert(part).values(mappedDBParts);
+      }
+
+      await updateChatUpdatedAt({ chatId });
+      return;
+    }
+
     return await db.transaction(async (tx) => {
       // Convert ChatMessage to DBMessage (without parts)
       const dbMessage = chatMessageToDbMessage(chatMessage, chatId);
@@ -356,6 +371,32 @@ export async function saveChatMessages({
     if (messages.length === 0) {
       return;
     }
+
+    if (isLocalDbRuntime) {
+      const dbMessages = messages.map(({ id, chatId, message: msg }) => {
+        const dbMsg = chatMessageToDbMessage(msg, chatId);
+        dbMsg.id = id;
+        return dbMsg;
+      });
+      await db.insert(message).values(dbMessages);
+
+      const allDbParts: Omit<Part, "id" | "createdAt">[] = [];
+      for (const { id, message: msg } of messages) {
+        const dbParts = mapUIMessagePartsToDBParts(msg.parts, id);
+        allDbParts.push(...dbParts);
+      }
+      if (allDbParts.length > 0) {
+        await db.insert(part).values(allDbParts);
+      }
+
+      const uniqueChatIds = [...new Set(messages.map(({ chatId }) => chatId))];
+      await Promise.all(
+        uniqueChatIds.map((chatId) => updateChatUpdatedAt({ chatId }))
+      );
+
+      return;
+    }
+
     return await db.transaction(async (tx) => {
       // Insert messages (without parts - parts are stored in Part table)
       const dbMessages = messages.map(({ id, chatId, message: msg }) => {
@@ -402,6 +443,33 @@ export async function updateMessage({
   message: ChatMessage;
 }) {
   try {
+    if (isLocalDbRuntime) {
+      const dbMessage = chatMessageToDbMessage(chatMessage, chatId);
+      dbMessage.id = id;
+
+      await db
+        .update(message)
+        .set({
+          annotations: dbMessage.annotations,
+          attachments: dbMessage.attachments,
+          createdAt: dbMessage.createdAt,
+          branchId: dbMessage.branchId,
+          parentMessageId: dbMessage.parentMessageId,
+          lastContext: dbMessage.lastContext,
+          activeStreamId: dbMessage.activeStreamId,
+        })
+        .where(eq(message.id, id));
+
+      await db.delete(part).where(eq(part.messageId, id));
+
+      const mappedDBParts = mapUIMessagePartsToDBParts(chatMessage.parts, id);
+      if (mappedDBParts.length > 0) {
+        await db.insert(part).values(mappedDBParts);
+      }
+
+      return;
+    }
+
     return await db.transaction(async (tx) => {
       // Convert ChatMessage to DBMessage (without parts)
       const dbMessage = chatMessageToDbMessage(chatMessage, chatId);
@@ -414,6 +482,7 @@ export async function updateMessage({
           annotations: dbMessage.annotations,
           attachments: dbMessage.attachments,
           createdAt: dbMessage.createdAt,
+          branchId: dbMessage.branchId,
           parentMessageId: dbMessage.parentMessageId,
           lastContext: dbMessage.lastContext,
           activeStreamId: dbMessage.activeStreamId,
@@ -493,6 +562,7 @@ export async function getAllMessagesByChatId({
         metadata: {
           createdAt: msg.createdAt,
           activeStreamId: msg.activeStreamId,
+          branchId: msg.branchId,
           parentMessageId: msg.parentMessageId,
           selectedModel: (msg.selectedModel ||
             "") as ChatMessage["metadata"]["selectedModel"],
@@ -798,6 +868,7 @@ export async function getChatMessageWithPartsById({
         metadata: {
           createdAt: dbMessage.createdAt,
           activeStreamId: dbMessage.activeStreamId,
+          branchId: dbMessage.branchId,
           parentMessageId: dbMessage.parentMessageId,
           selectedModel: (dbMessage.selectedModel ||
             "") as ChatMessage["metadata"]["selectedModel"],

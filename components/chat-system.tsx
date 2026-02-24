@@ -8,7 +8,9 @@ import { DataStreamProvider } from "@/components/data-stream-provider";
 import { ArtifactProvider } from "@/hooks/use-artifact";
 import type { AppModelId } from "@/lib/ai/app-models";
 import type { ChatMessage, UiToolName } from "@/lib/ai/types";
+import type { ChatBranch } from "@/lib/db/schema";
 import { CustomStoreProvider } from "@/lib/stores/custom-store-provider";
+import { BranchStateProvider } from "@/providers/branch-state-provider";
 import { ChatInputProvider } from "@/providers/chat-input-provider";
 import {
   MessageTreeProvider,
@@ -41,6 +43,8 @@ function ChatThreadSync({
 
 export const ChatSystem = memo(function PureChatSystem({
   id,
+  activeBranchId = null,
+  branches = [],
   initialMessages,
   isReadonly,
   initialTool = null,
@@ -48,6 +52,8 @@ export const ChatSystem = memo(function PureChatSystem({
   projectId,
 }: {
   id: string;
+  activeBranchId?: string | null;
+  branches?: ChatBranch[];
   initialMessages: ChatMessage[];
   isReadonly: boolean;
   initialTool?: UiToolName | null;
@@ -61,44 +67,50 @@ export const ChatSystem = memo(function PureChatSystem({
           initialMessages={initialMessages}
           key={id}
         >
-          <MessageTreeProvider>
-            {isReadonly ? (
-              <>
-                <ChatThreadSync
-                  id={id}
-                  projectId={projectId}
-                  withHandler={false}
-                />
-                <Chat
-                  id={id}
-                  initialMessages={initialMessages}
-                  isReadonly={isReadonly}
-                  key={id}
-                  projectId={projectId}
-                />
-              </>
-            ) : (
-              <ChatInputProvider
-                initialTool={initialTool ?? null}
-                isProjectContext={!!projectId}
-                localStorageEnabled={true}
-                overrideModelId={overrideModelId}
-              >
-                <ChatThreadSync
-                  id={id}
-                  projectId={projectId}
-                  withHandler={true}
-                />
-                <Chat
-                  id={id}
-                  initialMessages={initialMessages}
-                  isReadonly={isReadonly}
-                  key={id}
-                  projectId={projectId}
-                />
-              </ChatInputProvider>
-            )}
-          </MessageTreeProvider>
+          <BranchStateProvider
+            activeBranchId={activeBranchId}
+            branches={branches}
+          >
+            <MessageTreeProvider>
+              {isReadonly ? (
+                <>
+                  <ChatThreadSync
+                    id={id}
+                    projectId={projectId}
+                    withHandler={false}
+                  />
+                  <Chat
+                    id={id}
+                    initialMessages={initialMessages}
+                    isReadonly={isReadonly}
+                    key={id}
+                    projectId={projectId}
+                  />
+                </>
+              ) : (
+                <ChatInputProvider
+                  activeBranchId={activeBranchId}
+                  initialTool={initialTool ?? null}
+                  isProjectContext={!!projectId}
+                  localStorageEnabled={true}
+                  overrideModelId={overrideModelId}
+                >
+                  <ChatThreadSync
+                    id={id}
+                    projectId={projectId}
+                    withHandler={true}
+                  />
+                  <Chat
+                    id={id}
+                    initialMessages={initialMessages}
+                    isReadonly={isReadonly}
+                    key={id}
+                    projectId={projectId}
+                  />
+                </ChatInputProvider>
+              )}
+            </MessageTreeProvider>
+          </BranchStateProvider>
         </CustomStoreProvider>
       </DataStreamProvider>
     </ArtifactProvider>

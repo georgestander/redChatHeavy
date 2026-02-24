@@ -47,7 +47,9 @@ function loadKvCacheBinding(): Promise<KvNamespaceLike | null> {
 
     try {
       const moduleName = "cloudflare:workers";
-      const workersModule = (await import(moduleName)) as {
+      const workersModule = (await import(
+        /* @vite-ignore */ moduleName
+      )) as {
         env?: { KV_CACHE?: KvNamespaceLike };
       };
       return workersModule.env?.KV_CACHE ?? null;

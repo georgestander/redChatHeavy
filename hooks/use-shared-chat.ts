@@ -1,8 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ChatMessage } from "@/lib/ai/types";
+import type { ChatBranch } from "@/lib/db/schema";
 import { chatKeys } from "@/lib/query-keys";
 import type { UIChat } from "@/lib/types/ui-chat";
-import { getPublicChat, getPublicChatMessages } from "@/server/actions/chat";
+import {
+  getPublicChat,
+  getPublicChatBranches,
+  getPublicChatMessages,
+} from "@/server/actions/chat";
 
 type SerializedChat = Omit<UIChat, "createdAt" | "updatedAt"> & {
   createdAt: string | Date;
@@ -13,6 +18,11 @@ type SerializedChatMessage = Omit<ChatMessage, "metadata"> & {
   metadata: Omit<ChatMessage["metadata"], "createdAt"> & {
     createdAt: string | Date;
   };
+};
+
+type SerializedChatBranch = Omit<ChatBranch, "createdAt" | "archivedAt"> & {
+  createdAt: string | Date;
+  archivedAt: string | Date | null;
 };
 
 function hydrateChatDates(chat: SerializedChat): UIChat {
@@ -42,6 +52,22 @@ function hydrateMessageDates(message: SerializedChatMessage): ChatMessage {
   };
 }
 
+function hydrateBranchDates(branch: SerializedChatBranch): ChatBranch {
+  return {
+    ...branch,
+    createdAt:
+      branch.createdAt instanceof Date
+        ? branch.createdAt
+        : new Date(branch.createdAt),
+    archivedAt:
+      branch.archivedAt instanceof Date
+        ? branch.archivedAt
+        : branch.archivedAt
+          ? new Date(branch.archivedAt)
+          : null,
+  };
+}
+
 export function usePublicChat(
   chatId: string,
   { enabled }: { enabled?: boolean } = {}
@@ -62,6 +88,17 @@ export function usePublicChatMessages(chatId: string) {
     queryFn: async () => {
       const messages = await getPublicChatMessages({ chatId });
       return (messages as SerializedChatMessage[]).map(hydrateMessageDates);
+    },
+    enabled: !!chatId,
+  });
+}
+
+export function usePublicChatBranches(chatId: string) {
+  return useQuery({
+    queryKey: chatKeys.publicBranches(chatId),
+    queryFn: async () => {
+      const branches = await getPublicChatBranches({ chatId });
+      return (branches as SerializedChatBranch[]).map(hydrateBranchDates);
     },
     enabled: !!chatId,
   });

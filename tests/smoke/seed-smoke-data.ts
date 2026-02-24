@@ -281,7 +281,6 @@ export async function seedSmokeData(): Promise<SeedResult> {
                   url: "https://example.com/smoke",
                   title: "Smoke Source",
                   content: "Source content",
-                  source: "web",
                 },
               ],
             },
@@ -330,10 +329,10 @@ export async function seedSmokeData(): Promise<SeedResult> {
         input: {
           title: `${SMOKE_TITLE_PREFIX} Python Check`,
           code: "print('smoke ok')",
-          icon: "python",
         },
         output: {
           message: "smoke ok",
+          chart: "",
         },
       } as ChatMessage["parts"][number],
     ],

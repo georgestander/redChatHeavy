@@ -1,5 +1,5 @@
 import { useChatStoreApi } from "@ai-sdk-tools/store";
-import { Copy, Pencil, PencilOff } from "lucide-react";
+import { Copy, GitBranchPlus, Pencil, PencilOff } from "lucide-react";
 import { memo } from "react";
 import { toast } from "sonner";
 import { useCopyToClipboard } from "usehooks-ts";
@@ -7,11 +7,40 @@ import {
   MessageAction as Action,
   MessageActions as Actions,
 } from "@/components/ai-elements/message";
+import { useCreateChatBranch } from "@/hooks/chat-sync-hooks";
 import { useIsMobile } from "@/hooks/use-mobile";
+import type { ChatMessage } from "@/lib/ai/types";
+import { getTextContentFromMessage } from "@/lib/branching/message-text";
 import { useMessageRoleById } from "@/lib/stores/hooks-base";
+import { useBranchState } from "@/providers/branch-state-provider";
+import { useSession } from "@/providers/session-provider";
 import { useChatVotes } from "./chat/use-chat-votes";
 import { FeedbackActions } from "./feedback-actions";
 import { MessageSiblings } from "./message-siblings";
+
+function getSelectionSpan(textContent: string): {
+  span: { start: number; end: number } | null;
+  excerpt: string | null;
+} {
+  if (typeof window === "undefined") {
+    return { span: null, excerpt: null };
+  }
+
+  const selectionText = window.getSelection()?.toString().trim() ?? "";
+  if (!selectionText) {
+    return { span: null, excerpt: null };
+  }
+
+  const start = textContent.indexOf(selectionText);
+  if (start === -1) {
+    return { span: null, excerpt: selectionText };
+  }
+
+  return {
+    span: { start, end: start + selectionText.length },
+    excerpt: selectionText,
+  };
+}
 
 function PureMessageActions({
   chatId,
@@ -33,6 +62,13 @@ function PureMessageActions({
   const storeApi = useChatStoreApi();
   const [_, copyToClipboard] = useCopyToClipboard();
   const role = useMessageRoleById(messageId);
+  const { mutateAsync: createBranch, isPending: isCreatingBranch } =
+    useCreateChatBranch();
+  const { activeBranchId, setActiveBranchId, setCompareMode, setCompareSheetOpen } =
+    useBranchState();
+  const { data: session } = useSession();
+  const isAuthenticated = Boolean(session?.user);
+  const shouldUsePersistedBranching = isAuthenticated;
 
   const isMobile = useIsMobile();
 
@@ -74,6 +110,84 @@ function PureMessageActions({
           </Action>
         ))}
 
+      {!isReadOnly && (
+        <Action
+          className="h-7 w-7 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          disabled={shouldUsePersistedBranching && isCreatingBranch}
+          onClick={async () => {
+            const message = storeApi
+              .getState()
+              .messages.find((m) => m.id === messageId) as ChatMessage | undefined;
+            if (!message) {
+              return;
+            }
+
+            const textContent = getTextContentFromMessage(message);
+            const fallbackExcerpt =
+              textContent.length > 280
+                ? `${textContent.slice(0, 277).trimEnd()}...`
+                : textContent || null;
+            const { span, excerpt } = getSelectionSpan(textContent);
+            const branchExcerpt = (excerpt ?? fallbackExcerpt)?.slice(0, 2000) ?? null;
+
+            if (!shouldUsePersistedBranching) {
+              const currentMessages =
+                storeApi.getState().getThrottledMessages() as ChatMessage[];
+              const messageIndex = currentMessages.findIndex(
+                (m) => m.id === messageId
+              );
+              if (messageIndex === -1) {
+                toast.error("Could not branch this message");
+                return;
+              }
+
+              const localBranchMessages = currentMessages.slice(
+                0,
+                messageIndex + 1
+              );
+              storeApi.getState().setMessages(localBranchMessages);
+
+              toast.success(
+                branchExcerpt
+                  ? "Started local branch from selection"
+                  : "Started local branch"
+              );
+              return;
+            }
+
+            try {
+              const createdBranch = await createBranch({
+                messageId,
+                parentBranchId: activeBranchId ?? null,
+                excerpt: branchExcerpt,
+                span,
+              });
+
+              if (createdBranch?.id) {
+                setActiveBranchId(createdBranch.id, { history: "push" });
+                if (branchExcerpt) {
+                  setCompareMode(true, { history: "replace" });
+                  setCompareSheetOpen(true);
+                }
+              }
+
+              toast.success("Branch created");
+            } catch {
+              toast.error("Failed to create branch");
+            }
+          }}
+          tooltip={
+            shouldUsePersistedBranching
+              ? isCreatingBranch
+                ? "Creating branch..."
+                : "Branch message"
+              : "Branch message (local)"
+          }
+        >
+          <GitBranchPlus className="h-3.5 w-3.5" />
+        </Action>
+      )}
+
       <MessageSiblings isReadOnly={isReadOnly} messageId={messageId} />
 
       <Action
@@ -86,11 +200,7 @@ function PureMessageActions({
             return;
           }
 
-          const textFromParts = message.parts
-            ?.filter((part) => part.type === "text")
-            .map((part) => part.text)
-            .join("\n")
-            .trim();
+          const textFromParts = getTextContentFromMessage(message as ChatMessage);
 
           if (!textFromParts) {
             toast.error("There's no text to copy!");

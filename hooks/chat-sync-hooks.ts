@@ -13,7 +13,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import type { ChatMessage } from "@/lib/ai/types";
 import { getAnonymousSession } from "@/lib/anonymous-session-client";
-import type { Document, Project } from "@/lib/db/schema";
+import type { ChatBranch, Document, Project } from "@/lib/db/schema";
 import {
   chatKeys,
   creditsKeys,
@@ -26,13 +26,17 @@ import { useChatId } from "@/providers/chat-id-provider";
 import { useSession } from "@/providers/session-provider";
 import {
   cloneSharedChat,
+  createChatBranch,
   deleteChat as deleteChatAction,
   deleteTrailingMessages,
   getAllChats,
+  getChatBranches,
   getChatById as getChatByIdAction,
   getChatMessages,
+  getPublicChatBranches,
   getPublicChatMessages,
   renameChat,
+  renameChatBranch,
   setIsPinned,
   setVisibility,
 } from "@/server/actions/chat";
@@ -64,6 +68,11 @@ type SerializedChatMessage = Omit<ChatMessage, "metadata"> & {
   metadata: Omit<ChatMessage["metadata"], "createdAt"> & {
     createdAt: string | Date;
   };
+};
+
+type SerializedChatBranch = Omit<ChatBranch, "createdAt" | "archivedAt"> & {
+  createdAt: string | Date;
+  archivedAt: string | Date | null;
 };
 
 function hydrateChatDates(chat: SerializedChat): UIChat {
@@ -104,6 +113,22 @@ function hydrateMessageDates(message: SerializedChatMessage): ChatMessage {
           ? message.metadata.createdAt
           : new Date(message.metadata.createdAt),
     },
+  };
+}
+
+function hydrateBranchDates(branch: SerializedChatBranch): ChatBranch {
+  return {
+    ...branch,
+    createdAt:
+      branch.createdAt instanceof Date
+        ? branch.createdAt
+        : new Date(branch.createdAt),
+    archivedAt:
+      branch.archivedAt instanceof Date
+        ? branch.archivedAt
+        : branch.archivedAt
+          ? new Date(branch.archivedAt)
+          : null,
   };
 }
 
@@ -162,10 +187,41 @@ export function useGetChatMessagesQueryOptions() {
   return {
     queryKey,
     queryFn: async () => {
-      const messages = isShared
-        ? await getPublicChatMessages({ chatId: chatId || "" })
-        : await getChatMessages({ chatId: chatId || "" });
-      return (messages as SerializedChatMessage[]).map(hydrateMessageDates);
+      try {
+        const messages = isShared
+          ? await getPublicChatMessages({ chatId: chatId || "" })
+          : await getChatMessages({ chatId: chatId || "" });
+        return (messages as SerializedChatMessage[]).map(hydrateMessageDates);
+      } catch (error) {
+        console.error("Failed to load chat messages", error);
+        return [] as ChatMessage[];
+      }
+    },
+    enabled: !!chatId && isPersisted && (isShared || !!session?.user),
+  };
+}
+
+export function useGetChatBranchesQueryOptions() {
+  const { data: session } = useSession();
+  const { id: chatId, isPersisted, source } = useChatId();
+  const isShared = source === "share";
+
+  const queryKey = isShared
+    ? chatKeys.publicBranches(chatId || "")
+    : chatKeys.branches(chatId || "");
+
+  return {
+    queryKey,
+    queryFn: async () => {
+      try {
+        const branches = isShared
+          ? await getPublicChatBranches({ chatId: chatId || "" })
+          : await getChatBranches({ chatId: chatId || "" });
+        return (branches as SerializedChatBranch[]).map(hydrateBranchDates);
+      } catch (error) {
+        console.error("Failed to load chat branches", error);
+        return [] as ChatBranch[];
+      }
     },
     enabled: !!chatId && isPersisted && (isShared || !!session?.user),
   };
@@ -289,6 +345,58 @@ export function useRenameChat() {
           queryKey: chatKeys.byId(chatId),
         }),
       ]);
+    },
+  });
+}
+
+export function useCreateChatBranch() {
+  const { id: chatId } = useChatId();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      messageId,
+      parentBranchId,
+      title,
+      excerpt,
+      span,
+    }: {
+      messageId: string;
+      parentBranchId?: string | null;
+      title?: string;
+      excerpt?: string | null;
+      span?: { start: number; end: number } | null;
+    }) =>
+      createChatBranch({
+        chatId,
+        messageId,
+        parentBranchId: parentBranchId ?? null,
+        title,
+        excerpt: excerpt ?? null,
+        span: span ?? null,
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: chatKeys.branches(chatId) }),
+        qc.invalidateQueries({ queryKey: chatKeys.messages(chatId) }),
+      ]);
+    },
+  });
+}
+
+export function useRenameChatBranch() {
+  const { id: chatId } = useChatId();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ branchId, title }: { branchId: string; title: string }) =>
+      renameChatBranch({
+        chatId,
+        branchId,
+        title,
+      }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: chatKeys.branches(chatId) });
     },
   });
 }
@@ -583,8 +691,17 @@ export function useGetChatByIdQueryOptions(chatId: string) {
   return {
     queryKey: chatKeys.byId(chatId),
     queryFn: async () => {
-      const chat = await getChatByIdAction({ chatId });
-      return hydrateChatDates(chat as SerializedChat);
+      try {
+        const chat = await getChatByIdAction({ chatId });
+        if (!chat) {
+          return null;
+        }
+
+        return hydrateChatDates(chat as SerializedChat);
+      } catch (error) {
+        console.error("Failed to load chat by id", error);
+        return null;
+      }
     },
     enabled: !!chatId && !!session?.user,
   };
