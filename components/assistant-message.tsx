@@ -2,8 +2,8 @@
 import { useChatId, useChatStatus } from "@ai-sdk-tools/store";
 import { memo } from "react";
 import { useMessageMetadataById } from "@/lib/stores/hooks-base";
-import { AssistantBranchSelection } from "./assistant-branch-selection";
 import { Message, MessageContent } from "./ai-elements/message";
+import { AssistantBranchSelection } from "./assistant-branch-selection";
 import { FollowUpSuggestionsParts } from "./followup-suggestions";
 import { MessageActions } from "./message-actions";
 import { MessageParts } from "./message-parts";

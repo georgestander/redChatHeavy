@@ -12,8 +12,8 @@ import { getBranchThread } from "@/lib/branching/compare-thread";
 import { chatKeys } from "@/lib/query-keys";
 import { useMessageIds } from "@/lib/stores/hooks-base";
 import { cn } from "@/lib/utils";
-import { useChatId } from "@/providers/chat-id-provider";
 import { useBranchState } from "@/providers/branch-state-provider";
+import { useChatId } from "@/providers/chat-id-provider";
 import { getChatMessages, getPublicChatMessages } from "@/server/actions/chat";
 import {
   ResizableHandle,

@@ -188,7 +188,7 @@ function createDevLocalSession(userId: string): Session {
   };
 }
 
-export function getDevLocalSessionFromHeaders(headers: Headers): Session | null {
+export function getDevLocalSessionFromHeaders(_headers: Headers): Session | null {
   if (!isDevLocalSessionFallbackEnabled()) {
     return null;
   }

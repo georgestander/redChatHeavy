@@ -109,7 +109,7 @@ for (const entry of uniqueNewEntries) {
   const monthHeading = formatMonthHeading(mergedDate);
   const newSection = [...sectionLinesForEntry(entry), ""];
 
-  let monthIndex = findMonthHeadingIndex(monthHeading);
+  const monthIndex = findMonthHeadingIndex(monthHeading);
 
   if (monthIndex === -1) {
     const firstMonthIndex = findFirstMonthHeadingIndex();

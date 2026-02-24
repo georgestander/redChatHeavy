@@ -12,9 +12,9 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useCreateChatBranch } from "@/hooks/chat-sync-hooks";
+import type { ChatMessage } from "@/lib/ai/types";
 import { computeSelectionOffsets } from "@/lib/branching/selection-offsets";
 import { cn } from "@/lib/utils";
-import type { ChatMessage } from "@/lib/ai/types";
 import { useBranchState } from "@/providers/branch-state-provider";
 import { useSession } from "@/providers/session-provider";
 import { Button } from "./ui/button";
@@ -223,10 +223,6 @@ export function AssistantBranchSelection({
   ]);
 
   useEffect(() => {
-    setSelection(null);
-  }, [messageId]);
-
-  useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         clearSelection();
@@ -296,8 +292,6 @@ export function AssistantBranchSelection({
   return (
     <div
       className={cn("relative", className)}
-      onKeyUp={scheduleSelectionCheck}
-      onMouseUp={scheduleSelectionCheck}
       ref={containerRef}
     >
       {children}

@@ -2,8 +2,8 @@
 
 import { ArrowUpRightFromSquare } from "lucide-react";
 import type { ChatMessage } from "@/lib/ai/types";
-import type { ChatBranch } from "@/lib/db/schema";
 import { getTextContentFromMessage } from "@/lib/branching/message-text";
+import type { ChatBranch } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 import { Response } from "../ai-elements/response";
 import { ScrollArea } from "../ui/scroll-area";
