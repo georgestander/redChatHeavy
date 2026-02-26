@@ -63,8 +63,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { LimitDisplay } from "./upgrade-cta/limit-display";
 import { LoginPrompt } from "./upgrade-cta/login-prompt";
 
-const PROJECT_ROUTE_REGEX = /^\/project\/([^/]+)$/;
-
 /** Derive accept string for images only */
 function getAcceptImages(acceptedTypes: Record<string, string[]>): string {
   return Object.entries(acceptedTypes)
@@ -250,34 +248,6 @@ function PureMultimodalInput({
     ]
   );
 
-  // Update URL when sending message in new chat or project
-  // Anonymous users stay on / - no URL redirect for them
-  const updateChatUrl = useCallback(
-    (chatIdToAdd: string) => {
-      if (!session?.user) {
-        return;
-      }
-
-      const currentPath = window.location.pathname;
-      if (currentPath === "/") {
-        window.history.pushState({}, "", `/chat/${chatIdToAdd}`);
-        return;
-      }
-
-      // Handle project routes: /project/:projectId -> /project/:projectId/chat/:chatId
-      const projectMatch = currentPath.match(PROJECT_ROUTE_REGEX);
-      if (projectMatch) {
-        const [, projectId] = projectMatch;
-        window.history.pushState(
-          {},
-          "",
-          `/project/${projectId}/chat/${chatIdToAdd}`
-        );
-      }
-    },
-    [session?.user]
-  );
-
   // Trim messages in edit mode
   const trimMessagesInEditMode = useCallback(
     (parentId: string | null) => {
@@ -324,8 +294,6 @@ function PureMultimodalInput({
 
   const coreSubmitLogic = useCallback(() => {
     const input = getInputValue();
-
-    updateChatUrl(chatId);
 
     // Get the appropriate parent message ID
     const effectiveParentMessageId = isEditMode
@@ -387,7 +355,6 @@ function PureMultimodalInput({
     lastMessageId,
     onSendMessage,
     sendMessage,
-    updateChatUrl,
     trimMessagesInEditMode,
   ]);
 

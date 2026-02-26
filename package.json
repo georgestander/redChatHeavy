@@ -138,6 +138,7 @@
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^3.0.6",
     "react-server-dom-webpack": "19.2.3",
+    "remark-gfm": "^4.0.1",
     "rwsdk": "1.0.0-beta.53",
     "server-only": "^0.0.1",
     "shiki": "^3.19.0",

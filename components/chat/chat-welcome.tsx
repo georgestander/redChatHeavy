@@ -7,6 +7,7 @@ import { SuggestedActions } from "@/components/suggested-actions";
 import type { ChatMessage } from "@/lib/ai/types";
 import { useLastMessageId } from "@/lib/stores/hooks-base";
 import { cn } from "@/lib/utils";
+import { useBranchState } from "@/providers/branch-state-provider";
 import { useChatInput } from "@/providers/chat-input-provider";
 
 function WelcomeMessage() {
@@ -30,6 +31,12 @@ function PureChatWelcome({
 }) {
   const parentMessageId = useLastMessageId();
   const { selectedModelId } = useChatInput();
+  const { activeBranch } = useBranchState();
+  const suppressWelcomeForBranch = Boolean(
+    activeBranch?.parentBranchId ||
+      activeBranch?.createdFromMessageId ||
+      (activeBranch?.createdFromExcerpt?.trim().length ?? 0) > 0
+  );
 
   return (
     <div
@@ -39,19 +46,23 @@ function PureChatWelcome({
       )}
     >
       <div className="mx-auto w-full p-2 @[500px]:px-4 md:max-w-3xl">
-        <div className="mb-6">
-          <WelcomeMessage />
-        </div>
+        {suppressWelcomeForBranch ? null : (
+          <div className="mb-6">
+            <WelcomeMessage />
+          </div>
+        )}
         <MultimodalInput
           chatId={chatId}
           parentMessageId={parentMessageId}
           status={status}
         />
-        <SuggestedActions
-          chatId={chatId}
-          className="mt-4"
-          selectedModelId={selectedModelId}
-        />
+        {suppressWelcomeForBranch ? null : (
+          <SuggestedActions
+            chatId={chatId}
+            className="mt-4"
+            selectedModelId={selectedModelId}
+          />
+        )}
       </div>
     </div>
   );

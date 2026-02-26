@@ -425,6 +425,25 @@
   @apply bg-blue-200 hover:bg-blue-300 dark:hover:bg-blue-400/50 dark:text-blue-50 dark:bg-blue-500/40;
 }
 
+.branch-highlight {
+  background: color-mix(in oklch, var(--primary) 24%, transparent);
+  border-radius: 0.2rem;
+  color: inherit;
+  padding: 0 0.1rem;
+}
+
+.branch-highlight[data-branch-id] {
+  cursor: pointer;
+}
+
+.branch-highlight[data-branch-id]:hover {
+  background: color-mix(in oklch, var(--primary) 34%, transparent);
+}
+
+.branch-highlight[data-branch-active="true"] {
+  background: color-mix(in oklch, var(--primary) 40%, transparent);
+}
+
 /* Lexical Editor Styles */
 .lexical-editor-container {
   position: relative;

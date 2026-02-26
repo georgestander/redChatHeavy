@@ -7,11 +7,33 @@ import { toast } from "sonner";
 import { useDataStream } from "@/components/data-stream-provider";
 import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
 import { useCompleteDataPart } from "@/hooks/use-complete-data-part";
+import { usePathname } from "@/hooks/use-navigation";
 import { ChatSDKError } from "@/lib/ai/errors";
 import type { ChatMessage } from "@/lib/ai/types";
 import { useThreadInitialMessages } from "@/lib/stores/hooks-threads";
 import { fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { useSession } from "@/providers/session-provider";
+
+const PROJECT_HOME_ROUTE_REGEX = /^\/project\/([^/]+)$/;
+
+function promoteChatRouteAfterFirstResponse(chatId: string, pathname: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (pathname === "/") {
+    window.history.pushState({}, "", `/chat/${chatId}`);
+    return;
+  }
+
+  const projectHomeMatch = pathname.match(PROJECT_HOME_ROUTE_REGEX);
+  if (!projectHomeMatch) {
+    return;
+  }
+
+  const [, projectId] = projectHomeMatch;
+  window.history.pushState({}, "", `/project/${projectId}/chat/${chatId}`);
+}
 
 export function ChatSync({
   id,
@@ -21,6 +43,7 @@ export function ChatSync({
   projectId?: string;
 }) {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const { mutate: saveChatMessage } = useSaveMessageMutation();
   const { setDataStream } = useDataStream();
   const [_, setAutoResume] = useState(true);
@@ -53,6 +76,9 @@ export function ChatSync({
     generateId: generateUUID,
     onFinish: ({ message }) => {
       saveChatMessage({ message, chatId: id });
+      if (isAuthenticated) {
+        promoteChatRouteAfterFirstResponse(id, pathname);
+      }
       setAutoResume(true);
     },
     resume: isLastMessagePartial,

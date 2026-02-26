@@ -1,7 +1,9 @@
 "use client";
 
-// Middleware that extends @ai-sdk-tools/store with thread epoch tracking
-// Automatically bumps threadEpoch when messages change via setMessages
+// Middleware that extends @ai-sdk-tools/store with thread epoch tracking.
+// NOTE: threadEpoch is intended for explicit thread switches. Bumping it
+// during active request/stream phases remounts ChatSync and can abort the
+// in-flight first-turn stream.
 
 import type { StoreState as BaseChatStoreState } from "@ai-sdk-tools/store";
 import type { UIMessage } from "ai";
@@ -60,21 +62,12 @@ export const withThreads =
         }));
       },
 
-      // Override setMessages to auto-bump epoch when thread changes
+      // Override setMessages to avoid implicit ChatSync remounts.
+      // Regular chat updates (optimistic user send, stream deltas, retries,
+      // edits) should not rotate threadEpoch; explicit thread switches should
+      // go through setMessagesWithEpoch instead.
       setMessages: (messages: UI_MESSAGE[]) => {
-        const currentMessages = get().messages;
-        const currentIds = currentMessages.map((m) => m.id).join(",");
-        const newIds = messages.map((m) => m.id).join(",");
-
         originalSetMessages(messages);
-
-        // Only bump epoch if the thread structure actually changed
-        if (currentIds !== newIds) {
-          set((state) => ({
-            ...state,
-            threadEpoch: state.threadEpoch + 1,
-          }));
-        }
       },
     };
   };

@@ -3,6 +3,7 @@
 import { useChatStoreApi } from "@ai-sdk-tools/store";
 import { GitBranchPlus, X } from "lucide-react";
 import {
+  type MouseEvent,
   type PropsWithChildren,
   useCallback,
   useEffect,
@@ -10,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useCreateChatBranch } from "@/hooks/chat-sync-hooks";
 import type { ChatMessage } from "@/lib/ai/types";
@@ -23,10 +25,12 @@ type SelectionState = {
   span: { start: number; end: number } | null;
   text: string;
   rect: DOMRect;
+  anchorX: number;
 };
 
-const BRANCH_POPOVER_WIDTH = 220;
 const BRANCH_POPOVER_HEIGHT = 40;
+const BRANCH_POPOVER_OFFSET = 8;
+const POPUP_ANCHOR_MAX_WIDTH = 240;
 
 function getElementFromNode(node: Node): Element | null {
   if (node.nodeType === Node.ELEMENT_NODE) {
@@ -34,6 +38,85 @@ function getElementFromNode(node: Node): Element | null {
   }
 
   return node.parentElement;
+}
+
+function cloneRect(rect: DOMRect | DOMRectReadOnly): DOMRect {
+  return new DOMRect(rect.x, rect.y, rect.width, rect.height);
+}
+
+function getRectCenter(rect: DOMRect | DOMRectReadOnly): { x: number; y: number } {
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  };
+}
+
+function getSelectionAnchorRect(
+  selection: Selection,
+  range: Range,
+  pointerPoint?: { x: number; y: number }
+): DOMRect | null {
+  const rects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.width > 0 || rect.height > 0
+  );
+
+  if (rects.length > 0) {
+    const point = pointerPoint;
+    const pickClosestRect = (target: { x: number; y: number }) =>
+      rects.reduce((closest, rect) => {
+        const closestCenter = getRectCenter(closest);
+        const rectCenter = getRectCenter(rect);
+        const closestDistance =
+          Math.abs(closestCenter.x - target.x) +
+          Math.abs(closestCenter.y - target.y);
+        const rectDistance =
+          Math.abs(rectCenter.x - target.x) + Math.abs(rectCenter.y - target.y);
+
+        return rectDistance < closestDistance ? rect : closest;
+      });
+
+    let selectedRect: DOMRect | DOMRectReadOnly = rects[0];
+
+    // Prefer a rect closest to the focus/caret point so the bubble appears where
+    // the user ended the selection rather than the center of a large multi-line box.
+    if (point) {
+      selectedRect = pickClosestRect(point);
+    } else {
+      const focusNode = selection.focusNode;
+      if (focusNode) {
+        try {
+          const focusRange = document.createRange();
+          focusRange.setStart(focusNode, selection.focusOffset);
+          focusRange.collapse(true);
+          const focusRect =
+            focusRange.getClientRects().item(0) ??
+            focusRange.getBoundingClientRect();
+
+          if (focusRect && (focusRect.width > 0 || focusRect.height > 0)) {
+            selectedRect = pickClosestRect(getRectCenter(focusRect));
+          }
+        } catch {
+          // Keep first rect fallback when focus range can't be resolved.
+        }
+      }
+    }
+
+    return cloneRect(
+      new DOMRect(
+        selectedRect.left,
+        selectedRect.top,
+        Math.min(selectedRect.width, POPUP_ANCHOR_MAX_WIDTH),
+        selectedRect.height
+      )
+    );
+  }
+
+  const boundingRect = range.getBoundingClientRect();
+  if (boundingRect.width > 0 || boundingRect.height > 0) {
+    return cloneRect(boundingRect);
+  }
+
+  return null;
 }
 
 export function AssistantBranchSelection({
@@ -62,9 +145,11 @@ export function AssistantBranchSelection({
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const selectionRafRef = useRef<number | null>(null);
+  const pointerAnchorRef = useRef<{ x: number; y: number } | null>(null);
 
   const clearSelection = useCallback(() => {
     setSelection(null);
+    pointerAnchorRef.current = null;
     const selected = window.getSelection();
     if (selected?.rangeCount) {
       selected.removeAllRanges();
@@ -121,22 +206,31 @@ export function AssistantBranchSelection({
         ? computedSpan
         : null;
 
-    const primaryRect = range.getBoundingClientRect();
-    const fallbackRect = range.getClientRects().item(0);
-    const rect =
-      (primaryRect.width > 0 || primaryRect.height > 0
-        ? primaryRect
-        : fallbackRect) ?? null;
+    const rect = getSelectionAnchorRect(
+      selected,
+      range,
+      pointerAnchorRef.current ?? undefined
+    );
     if (!rect) {
       setSelection(null);
       return;
     }
 
+    const anchorX =
+      pointerAnchorRef.current !== null
+        ? Math.min(
+            Math.max(pointerAnchorRef.current.x, rect.left),
+            rect.right || rect.left
+          )
+        : rect.left + rect.width / 2;
+
     setSelection({
       span,
       text,
       rect,
+      anchorX,
     });
+    pointerAnchorRef.current = null;
   }, [isReadonly]);
 
   const scheduleSelectionCheck = useCallback(() => {
@@ -222,6 +316,48 @@ export function AssistantBranchSelection({
     storeApi,
   ]);
 
+  const handlePersistedBranchHighlightClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target =
+        event.target instanceof Element ? event.target : null;
+      if (!target) {
+        return;
+      }
+
+      const highlight = target.closest<HTMLElement>("mark[data-branch-id]");
+      if (!highlight || !containerRef.current?.contains(highlight)) {
+        return;
+      }
+
+      const selectedText = window.getSelection()?.toString().trim() ?? "";
+      if (selectedText.length > 0) {
+        return;
+      }
+
+      const branchId = highlight.dataset.branchId?.trim();
+      if (!branchId) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (branchId !== activeBranchId) {
+        setActiveBranchId(branchId, { history: "push" });
+      }
+
+      setCompareMode(true, { history: "replace" });
+      setCompareSheetOpen(true);
+      setSelection(null);
+    },
+    [
+      activeBranchId,
+      setActiveBranchId,
+      setCompareMode,
+      setCompareSheetOpen,
+    ]
+  );
+
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -236,11 +372,16 @@ export function AssistantBranchSelection({
     const handleSelectionChange = () => {
       scheduleSelectionCheck();
     };
-    const handlePointerUp = () => {
+    const handlePointerUp = (event: PointerEvent) => {
+      pointerAnchorRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+      };
       scheduleSelectionCheck();
     };
     const handleViewportScroll = () => {
-      scheduleSelectionCheck();
+      // Keep behavior deterministic while the viewport moves.
+      setSelection(null);
     };
 
     window.addEventListener("keydown", handleEscape);
@@ -267,69 +408,69 @@ export function AssistantBranchSelection({
       return undefined;
     }
 
-    const centerX = selection.rect.left + selection.rect.width / 2;
-    const left = Math.max(
-      8,
-      Math.min(
-        centerX - BRANCH_POPOVER_WIDTH / 2,
-        window.innerWidth - BRANCH_POPOVER_WIDTH - 8
-      )
-    );
+    const left = Math.max(8, Math.min(selection.anchorX, window.innerWidth - 8));
 
     const canRenderBelow =
-      selection.rect.bottom + BRANCH_POPOVER_HEIGHT + 8 <= window.innerHeight;
+      selection.rect.bottom + BRANCH_POPOVER_HEIGHT + BRANCH_POPOVER_OFFSET <=
+      window.innerHeight;
     const top = canRenderBelow
-      ? selection.rect.bottom + 8
-      : Math.max(8, selection.rect.top - BRANCH_POPOVER_HEIGHT - 8);
+      ? selection.rect.bottom + BRANCH_POPOVER_OFFSET
+      : Math.max(
+          8,
+          selection.rect.top - BRANCH_POPOVER_HEIGHT - BRANCH_POPOVER_OFFSET
+        );
 
     return {
       top,
       left,
-      width: BRANCH_POPOVER_WIDTH,
     };
   }, [selection]);
 
   return (
     <div
       className={cn("relative", className)}
+      onClickCapture={handlePersistedBranchHighlightClick}
       ref={containerRef}
     >
       {children}
 
-      {selection && popoverStyle ? (
-        <div
-          className="fixed z-50"
-          style={{
-            left: popoverStyle.left,
-            top: popoverStyle.top,
-            width: popoverStyle.width,
-          }}
-        >
-          <div className="flex items-center gap-1 rounded-md border bg-popover px-2 py-1.5 shadow-md">
-            <Button
-              className="h-7 gap-1.5 px-2 text-xs"
-              disabled={isCreatingBranch}
-              onClick={() => {
-                void createSelectionBranch();
+      {selection && popoverStyle && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed z-50 -translate-x-1/2"
+              style={{
+                left: popoverStyle.left,
+                top: popoverStyle.top,
+                maxWidth: "calc(100vw - 16px)",
               }}
-              size="sm"
-              variant="default"
             >
-              <GitBranchPlus className="h-3.5 w-3.5" />
-              {isCreatingBranch ? "Branching..." : "Branch"}
-            </Button>
-            <Button
-              className="h-7 w-7 p-0"
-              onClick={clearSelection}
-              size="icon"
-              variant="ghost"
-            >
-              <X className="h-3.5 w-3.5" />
-              <span className="sr-only">Close</span>
-            </Button>
-          </div>
-        </div>
-      ) : null}
+              <div className="flex items-center gap-1 rounded-md border bg-popover px-2 py-1.5 shadow-md">
+                <Button
+                  className="h-7 gap-1.5 px-2 text-xs"
+                  disabled={isCreatingBranch}
+                  onClick={() => {
+                    void createSelectionBranch();
+                  }}
+                  size="sm"
+                  variant="default"
+                >
+                  <GitBranchPlus className="h-3.5 w-3.5" />
+                  {isCreatingBranch ? "Branching..." : "Branch"}
+                </Button>
+                <Button
+                  className="h-7 w-7 p-0"
+                  onClick={clearSelection}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </Button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

@@ -13,6 +13,7 @@ type MessagesPaneProps = {
   status: UseChatHelpers<ChatMessage>["status"];
   isReadonly: boolean;
   className?: string;
+  suppressGreeting?: boolean;
 };
 
 function PureMessagesPane({
@@ -20,6 +21,7 @@ function PureMessagesPane({
   status,
   isReadonly,
   className,
+  suppressGreeting = false,
 }: MessagesPaneProps) {
   const parentMessageId = useLastMessageId();
 
@@ -27,7 +29,11 @@ function PureMessagesPane({
     <div
       className={cn("flex h-full min-h-0 w-full flex-1 flex-col", className)}
     >
-      <Messages className="h-full min-h-0 flex-1" isReadonly={isReadonly} />
+      <Messages
+        className="h-full min-h-0 flex-1"
+        isReadonly={isReadonly}
+        suppressGreeting={suppressGreeting}
+      />
 
       <div className="relative @[500px]:bottom-4 z-10 w-full shrink-0">
         {isReadonly ? (

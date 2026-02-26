@@ -30,4 +30,15 @@ describe("getTextContentFromMessage", () => {
 
     expect(getTextContentFromMessage(message)).toBe("first\nsecond");
   });
+
+  it("preserves leading and trailing whitespace when trim is disabled", () => {
+    const message = makeMessage([
+      { type: "text", text: "  first" },
+      { type: "text", text: "second  " },
+    ] as ChatMessage["parts"]);
+
+    expect(getTextContentFromMessage(message, { trim: false })).toBe(
+      "  first\nsecond  "
+    );
+  });
 });
