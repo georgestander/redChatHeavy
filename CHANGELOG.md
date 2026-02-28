@@ -6,6 +6,13 @@ All notable changes to ChatJS are documented here.
 
 ## February 2026
 
+### 2026-02-28 07:06 UTC - PR #9: security: disable dev auth fallback in production
+
+- Security: disable production use of local dev auth fallback path.
+
+[View PR](https://github.com/georgestander/redChatHeavy/pull/9)
+<!-- changelog-pr:9 -->
+
 ### 2026-02-28 07:04 UTC - PR #8: security: restrict auth trusted origins
 
 - Security: restrict Better Auth trusted origins to configured allowlist instead of request-provided origin.
