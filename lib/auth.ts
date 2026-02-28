@@ -100,18 +100,20 @@ export const auth = betterAuth({
     schema,
   }),
   ...(baseURL ? { baseURL } : {}),
-  trustedOrigins: (request) => {
-    const baseOrigins = [
+  trustedOrigins: () => {
+    const origins = new Set<string>([
       "http://localhost:5173",
-      ...(env.APP_URL ? [env.APP_URL] : []),
-    ];
+      "http://127.0.0.1:5173",
+    ]);
 
-    if (!request) {
-      return baseOrigins;
+    if (env.APP_URL) {
+      origins.add(new URL(env.APP_URL).origin);
+    }
+    if (env.VERCEL_URL) {
+      origins.add(new URL(`https://${env.VERCEL_URL}`).origin);
     }
 
-    const requestOrigin = new URL(request.url).origin;
-    return Array.from(new Set([...baseOrigins, requestOrigin]));
+    return Array.from(origins);
   },
   secret: env.AUTH_SECRET,
 
