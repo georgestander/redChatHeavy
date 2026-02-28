@@ -30,6 +30,10 @@ function isLocalTcpPostgresUrl(databaseUrl: string): boolean {
 }
 
 function isDevLocalSessionFallbackEnabled(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+
   return (
     process.env.CHATJS_LOCAL_MODE === "1" ||
     (process.env.SKIP_ENV_VALIDATION === "1" &&
