@@ -12,6 +12,14 @@ export const DEV_LOCAL_DEFAULT_USER_ID = "local-dev-user";
 let ensureDevLocalUserPromise: Promise<void> | null = null;
 const DEV_LOCAL_USER_MAX_RETRIES = 3;
 
+function toOrigin(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
 function isLocalTcpPostgresUrl(databaseUrl: string): boolean {
   try {
     const parsed = new URL(databaseUrl);
@@ -100,19 +108,15 @@ export const auth = betterAuth({
     schema,
   }),
   ...(baseURL ? { baseURL } : {}),
-  trustedOrigins: (request) => {
-    const baseOrigins = [
+  trustedOrigins: (() => {
+    const trusted = [
       "http://localhost:5173",
       ...(env.APP_URL ? [env.APP_URL] : []),
-    ];
-
-    if (!request) {
-      return baseOrigins;
-    }
-
-    const requestOrigin = new URL(request.url).origin;
-    return Array.from(new Set([...baseOrigins, requestOrigin]));
-  },
+    ]
+      .map((value) => toOrigin(value))
+      .filter((value): value is string => typeof value === "string");
+    return Array.from(new Set(trusted));
+  })(),
   secret: env.AUTH_SECRET,
 
   session: {
