@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/drawer";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import type { SearchResultItem } from "@/lib/ai/tools/research-updates-schema";
-import { getFaviconUrl } from "@/lib/url-utils";
+import { getFaviconUrl, sanitizeExternalUrl } from "@/lib/url-utils";
 import { cn } from "@/lib/utils";
 import { Favicon } from "./favicon";
 import { FaviconGroup } from "./favicon-group";
@@ -26,26 +26,29 @@ const SourcesList = ({
   sources: SearchResultItem[] | undefined;
 }) => (
   <div className="space-y-3">
-    {sources?.map((source: SearchResultItem) => (
-      <a
-        className="block rounded-lg bg-neutral-50 p-4 transition-colors hover:bg-neutral-100 dark:bg-neutral-800/50 dark:hover:bg-neutral-800"
-        href={source.url}
-        key={source.url}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        <div className="flex items-start gap-3">
-          <div className="mt-1 shrink-0">
-            <Favicon url={getFaviconUrl(source)} />
+    {sources?.map((source: SearchResultItem) => {
+      const safeUrl = sanitizeExternalUrl(source.url);
+      return (
+        <a
+          className="block rounded-lg bg-neutral-50 p-4 transition-colors hover:bg-neutral-100 dark:bg-neutral-800/50 dark:hover:bg-neutral-800"
+          href={safeUrl ?? "#"}
+          key={source.url}
+          rel={safeUrl ? "noopener noreferrer" : undefined}
+          target={safeUrl ? "_blank" : undefined}
+        >
+          <div className="flex items-start gap-3">
+            <div className="mt-1 shrink-0">
+              <Favicon url={getFaviconUrl(source)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="font-medium text-sm leading-tight">
+                {source.title}
+              </h4>
+            </div>
           </div>
-          <div className="flex flex-col gap-1">
-            <h4 className="font-medium text-sm leading-tight">
-              {source.title}
-            </h4>
-          </div>
-        </div>
-      </a>
-    ))}
+        </a>
+      );
+    })}
   </div>
 );
 

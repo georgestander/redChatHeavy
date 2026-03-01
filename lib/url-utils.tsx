@@ -9,6 +9,19 @@ function tryParseUrl(url: string): URL | null {
 export function getDomainFromUrl(url: string) {
   return tryParseUrl(url)?.hostname.replace("www.", "") || "unknown";
 }
+
+export function sanitizeExternalUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function getFaviconUrl(result: {
   title: string;
   source: "web" | "academic" | "x";

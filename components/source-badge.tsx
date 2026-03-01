@@ -6,14 +6,20 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { SearchResultItem } from "@/lib/ai/tools/research-updates-schema";
-import { getDomainFromUrl, getFaviconUrl } from "@/lib/url-utils";
+import { getDomainFromUrl, getFaviconUrl, sanitizeExternalUrl } from "@/lib/url-utils";
 import { Favicon } from "./favicon";
 
 export function WebSourceBadge({ result }: { result: SearchResultItem }) {
+  const safeUrl = sanitizeExternalUrl(result.url);
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Link href={result.url} rel="noopener noreferrer" target="_blank">
+        <Link
+          href={safeUrl ?? "#"}
+          rel={safeUrl ? "noopener noreferrer" : undefined}
+          target={safeUrl ? "_blank" : undefined}
+        >
           <Badge
             className="max-w-[200px] gap-1 truncate text-xs"
             variant="secondary"
