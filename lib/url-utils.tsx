@@ -1,5 +1,13 @@
+function tryParseUrl(url: string): URL | null {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
+
 export function getDomainFromUrl(url: string) {
-  return new URL(url).hostname.replace("www.", "");
+  return tryParseUrl(url)?.hostname.replace("www.", "") || "unknown";
 }
 export function getFaviconUrl(result: {
   title: string;
@@ -8,5 +16,9 @@ export function getFaviconUrl(result: {
   content: string;
   tweetId?: string | undefined;
 }) {
-  return `https://www.google.com/s2/favicons?domain=${new URL(result.url).hostname}&sz=128`;
+  const domain = tryParseUrl(result.url)?.hostname;
+  if (!domain) {
+    return "https://www.google.com/s2/favicons?sz=128";
+  }
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 }
