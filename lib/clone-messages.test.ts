@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 import type { ChatMessage } from "./ai/types";
-import { cloneMessagesWithDocuments } from "./clone-messages";
+import {
+  cloneMessagesWithDocuments,
+  isManagedAttachmentUrl,
+  resolveAttachmentUrl,
+} from "./clone-messages";
 
 function createMessage({
   id,
@@ -209,5 +213,52 @@ describe("cloneMessagesWithDocuments", () => {
         assert.equal(part.output.documentId, newDocumentId);
       }
     }
+  });
+});
+
+describe("attachment URL allowlisting", () => {
+  it("accepts app-managed relative attachment URLs", () => {
+    assert.equal(isManagedAttachmentUrl("/api/files/app/file-a"), true);
+  });
+
+  it("accepts Vercel Blob absolute URLs", () => {
+    assert.equal(
+      isManagedAttachmentUrl(
+        "https://public.blob.vercel-storage.com/uploads/file-a.png"
+      ),
+      true
+    );
+  });
+
+  it("rejects lookalike domains that only contain the trusted host as a substring", () => {
+    assert.equal(
+      isManagedAttachmentUrl("https://evil.example/path/blob.vercel-storage.com"),
+      false
+    );
+    assert.equal(
+      isManagedAttachmentUrl("https://blob.vercel-storage.com.evil.example/a"),
+      false
+    );
+  });
+
+  it("rejects URLs where trusted host appears only in query parameters", () => {
+    assert.equal(
+      isManagedAttachmentUrl(
+        "https://169.254.169.254/latest/meta-data?ref=blob.vercel-storage.com"
+      ),
+      false
+    );
+  });
+
+  it("rejects invalid or non-http protocols", () => {
+    assert.equal(isManagedAttachmentUrl("javascript:alert(1)"), false);
+    assert.equal(isManagedAttachmentUrl("data:text/plain,hello"), false);
+  });
+
+  it("returns null when resolving disallowed URLs", () => {
+    assert.equal(
+      resolveAttachmentUrl("https://blob.vercel-storage.com.evil.example/a"),
+      null
+    );
   });
 });

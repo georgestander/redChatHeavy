@@ -251,8 +251,14 @@ async function cloneFileUIPart(part: FileUIPart): Promise<FileUIPart> {
       return part;
     }
 
+    const resolvedAttachmentUrl = resolveAttachmentUrl(part.url);
+    if (!resolvedAttachmentUrl) {
+      console.warn("Attachment URL is invalid, skipping clone:", part.url);
+      return part;
+    }
+
     // Fetch the original file
-    const response = await fetch(resolveAttachmentUrl(part.url));
+    const response = await fetch(resolvedAttachmentUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch attachment: ${response.statusText}`);
     }
@@ -291,33 +297,46 @@ async function cloneFileUIPart(part: FileUIPart): Promise<FileUIPart> {
   }
 }
 
-function isManagedAttachmentUrl(url: string): boolean {
-  if (url.startsWith("/api/files/")) {
-    return true;
-  }
+const VERCEL_BLOB_HOST = "blob.vercel-storage.com";
 
-  if (url.includes("blob.vercel-storage.com")) {
-    return true;
-  }
-
-  try {
-    const parsed = new URL(url);
-    return parsed.pathname.startsWith("/api/files/");
-  } catch {
-    return false;
-  }
+function isAllowedVercelBlobHost(hostname: string): boolean {
+  return hostname === VERCEL_BLOB_HOST || hostname.endsWith(`.${VERCEL_BLOB_HOST}`);
 }
 
-function resolveAttachmentUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
+function parseManagedAttachmentUrl(url: string): URL | null {
+  if (url.startsWith("/api/files/")) {
+    return new URL(url, getCloneBaseUrl());
   }
 
-  if (url.startsWith("/")) {
-    return new URL(url, getCloneBaseUrl()).toString();
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
   }
 
-  return url;
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+
+  if (isAllowedVercelBlobHost(parsed.hostname)) {
+    return parsed;
+  }
+
+  if (parsed.pathname.startsWith("/api/files/")) {
+    const cloneBaseUrl = new URL(getCloneBaseUrl());
+    return parsed.origin === cloneBaseUrl.origin ? parsed : null;
+  }
+
+  return null;
+}
+
+export function isManagedAttachmentUrl(url: string): boolean {
+  return parseManagedAttachmentUrl(url) !== null;
+}
+
+export function resolveAttachmentUrl(url: string): string | null {
+  return parseManagedAttachmentUrl(url)?.toString() ?? null;
 }
 
 function getCloneBaseUrl(): string {
