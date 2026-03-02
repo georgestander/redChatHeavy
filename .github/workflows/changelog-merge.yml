@@ -9,6 +9,10 @@ permissions:
   contents: write
   pull-requests: read
 
+concurrency:
+  group: changelog-merge-update-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   changelog-merge-update:
     name: Changelog Merge Update
@@ -136,4 +140,18 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md docs/changelog.mdx
           git commit -m "docs: update changelog from merged pull requests [skip ci]"
-          git push
+
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Changelog update pushed on attempt ${attempt}."
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "Failed to push changelog update after 3 attempts."
+              exit 1
+            fi
+
+            echo "Push rejected (likely non-fast-forward). Rebasing and retrying..."
+            git pull --rebase origin main
+          done

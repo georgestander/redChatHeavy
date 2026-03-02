@@ -6,6 +6,15 @@ All notable changes to ChatJS are documented here.
 
 ## February 2026
 
+### 2026-02-24 16:05 UTC - PR #7: Branching parity, markdown rendering, and local stream reliability
+
+- Delivered branch-chat parity updates so parent-origin highlights persist, stay clickable, and reopen linked child branches directly from parent history.
+- Restored readable markdown rendering for headings/lists/tables/code blocks, including visible code blocks and working table rendering in chat output.
+- Hardened local first-turn streaming by decoupling stream-buffer writes from client stream delivery to reduce intermittent first-message drop/stall behavior.
+
+[View PR](https://github.com/georgestander/redChatHeavy/pull/7)
+<!-- changelog-pr:7 -->
+
 ### 2026-02-24 08:53 UTC - PR #6: [codex] Sync root changelog with changelog automation
 
 - Added a root-level `CHANGELOG.md` as a first-class changelog surface for GitHub users.

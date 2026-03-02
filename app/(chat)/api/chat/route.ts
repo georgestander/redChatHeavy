@@ -158,8 +158,13 @@ async function consumeStreamForBuffer({
   let chunkBuffer = "";
   let pendingEvents: StreamBufferAppendEvent[] = [];
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  let flushInFlight: Promise<void> | null = null;
 
   const flushPendingEvents = async () => {
+    if (flushInFlight) {
+      return flushInFlight;
+    }
+
     if (pendingEvents.length === 0) {
       return;
     }
@@ -167,21 +172,29 @@ async function consumeStreamForBuffer({
     const events = pendingEvents;
     pendingEvents = [];
 
-    try {
-      await appendStreamBufferEvents({
-        env: streamBufferEnv,
-        streamId,
-        events,
-      });
-    } catch (error) {
-      log.error(
-        {
-          error,
+    flushInFlight = (async () => {
+      try {
+        await appendStreamBufferEvents({
+          env: streamBufferEnv,
           streamId,
-          batchSize: events.length,
-        },
-        "Failed to append stream batch"
-      );
+          events,
+        });
+      } catch (error) {
+        log.error(
+          {
+            error,
+            streamId,
+            batchSize: events.length,
+          },
+          "Failed to append stream batch"
+        );
+      }
+    })();
+
+    try {
+      await flushInFlight;
+    } finally {
+      flushInFlight = null;
     }
   };
 
@@ -201,14 +214,14 @@ async function consumeStreamForBuffer({
     }, STREAM_BUFFER_FLUSH_DELAY_MS);
   };
 
-  const enqueueEvents = async (events: StreamBufferAppendEvent[]) => {
+  const enqueueEvents = (events: StreamBufferAppendEvent[]) => {
     if (events.length === 0) {
       return;
     }
 
     pendingEvents.push(...events);
     if (pendingEvents.length >= STREAM_BUFFER_BATCH_SIZE) {
-      await flushPendingEvents();
+      void flushPendingEvents();
       return;
     }
 
@@ -226,7 +239,7 @@ async function consumeStreamForBuffer({
       const { blocks: chunkBlocks, remainder } =
         takeCompleteSseBlocks(chunkBuffer);
       chunkBuffer = remainder;
-      await enqueueEvents(toStreamBufferEvents(chunkBlocks));
+      enqueueEvents(toStreamBufferEvents(chunkBlocks));
     }
 
     const trailing = decoder.decode();
@@ -235,7 +248,7 @@ async function consumeStreamForBuffer({
     }
 
     const { blocks: trailingBlocks } = takeCompleteSseBlocks(chunkBuffer);
-    await enqueueEvents(toStreamBufferEvents(trailingBlocks));
+    enqueueEvents(toStreamBufferEvents(trailingBlocks));
   } catch (error) {
     log.error({ error, streamId }, "Failed while reading stream buffer branch");
   } finally {
@@ -244,7 +257,9 @@ async function consumeStreamForBuffer({
       flushTimer = null;
     }
 
-    await flushPendingEvents();
+    while (pendingEvents.length > 0 || flushInFlight) {
+      await flushPendingEvents();
+    }
 
     try {
       await finalizeStreamBuffer({ env: streamBufferEnv, streamId });

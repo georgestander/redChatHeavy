@@ -92,8 +92,6 @@ SKIP_ENV_VALIDATION=1 pnpm run test
 SKIP_ENV_VALIDATION=1 pnpm run build
 ```
 
-`SKIP_ENV_VALIDATION=1` is for local verification only and is ignored in CI/production.
-
 ## Open Questions
 
 - **Postgres provider (Neon) is not final**: Neon is the current Postgres backend, but I am still evaluating whether it is the long-term fit for this project.
