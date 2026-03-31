@@ -13,6 +13,9 @@ type DownloadResult = {
   data: Uint8Array;
 };
 
+const FILE_API_PREFIX = "/api/files/";
+const BLOB_HOST_SUFFIX = ".blob.vercel-storage.com";
+
 export type DownloadImplementation = (args: {
   url: URL;
 }) => Promise<DownloadResult>;
@@ -29,19 +32,69 @@ async function defaultDownload({ url }: { url: URL }): Promise<DownloadResult> {
   return { mediaType: contentType, data: new Uint8Array(arrayBuffer) };
 }
 
-function toHttpUrl(value: unknown): URL | null {
-  if (value instanceof URL) {
-    return value.protocol.startsWith("http") ? value : null;
-  }
-  if (typeof value === "string") {
+function getDownloadBaseUrl(): URL {
+  const raw = process.env.APP_URL?.trim();
+  if (raw) {
     try {
-      const url = new URL(value);
-      return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+      return new URL(raw);
     } catch {
-      return null;
+      // Fall through to local default.
     }
   }
-  return null;
+
+  return new URL("http://localhost:5173");
+}
+
+function isAllowedManagedHost(hostname: string): boolean {
+  return (
+    hostname === "blob.vercel-storage.com" ||
+    hostname.endsWith(BLOB_HOST_SUFFIX)
+  );
+}
+
+function toManagedAssetUrl(value: unknown): URL | null {
+  const baseUrl = getDownloadBaseUrl();
+
+  if (value instanceof URL) {
+    if (value.protocol !== "http:" && value.protocol !== "https:") {
+      return null;
+    }
+
+    if (
+      value.pathname.startsWith(FILE_API_PREFIX) &&
+      value.origin === baseUrl.origin
+    ) {
+      return value;
+    }
+
+    return isAllowedManagedHost(value.hostname) ? value : null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  if (value.startsWith(FILE_API_PREFIX)) {
+    return new URL(value, baseUrl);
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+
+    if (
+      parsed.pathname.startsWith(FILE_API_PREFIX) &&
+      parsed.origin === baseUrl.origin
+    ) {
+      return parsed;
+    }
+
+    return isAllowedManagedHost(parsed.hostname) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -66,7 +119,7 @@ async function downloadAssetsFromModelMessages(
         part.type === "file"
           ? (part as FilePart).data
           : (part as ImagePart).image;
-      const url = toHttpUrl(dataOrUrl);
+      const url = toManagedAssetUrl(dataOrUrl);
       if (url) {
         urlSet.add(url.toString());
       }
@@ -89,7 +142,7 @@ function mapFilePart(
   part: FilePart,
   downloaded: Record<string, DownloadResult>
 ): FilePart {
-  const url = toHttpUrl(part.data);
+  const url = toManagedAssetUrl(part.data);
   if (url) {
     const found = downloaded[url.toString()];
     if (found) {
@@ -107,7 +160,7 @@ function mapImagePart(
   part: ImagePart,
   downloaded: Record<string, DownloadResult>
 ): ImagePart {
-  const url = toHttpUrl(part.image);
+  const url = toManagedAssetUrl(part.image);
   if (url) {
     const found = downloaded[url.toString()];
     if (found) {
