@@ -157,6 +157,11 @@
   "overrides": {
     "commander": "^14.0.0"
   },
+  "pnpm": {
+    "overrides": {
+      "axios": "1.14.0"
+    }
+  },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.23.0",
     "@cloudflare/workers-types": "^4.20260205.0",
