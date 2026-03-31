@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 
 export type ConsoleOutputContent = {
+  id: string;
   type: "text" | "image";
   value: string;
 };
@@ -103,9 +104,9 @@ export function Console({
                 </div>
               ) : (
                 <div className="flex w-full flex-col gap-2 overflow-x-scroll text-zinc-900 dark:text-zinc-50">
-                  {consoleOutput.contents.map((content, contentIndex) =>
+                  {consoleOutput.contents.map((content) =>
                     content.type === "image" ? (
-                      <picture key={`${consoleOutput.id}-${contentIndex}`}>
+                      <picture key={content.id}>
                         <img
                           alt="output"
                           className="w-full max-w-(--breakpoint-toast-mobile) rounded-md"
@@ -117,7 +118,7 @@ export function Console({
                     ) : (
                       <div
                         className="break-word-wrap w-full whitespace-pre-line"
-                        key={`${consoleOutput.id}-${contentIndex}`}
+                        key={content.id}
                       >
                         {content.value}
                       </div>

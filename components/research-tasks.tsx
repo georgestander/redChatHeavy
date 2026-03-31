@@ -11,7 +11,7 @@ export const ResearchTasks = ({ updates }: { updates: ResearchUpdate[] }) => (
     {updates.map((update, index) => (
       <StepWrapper
         isLast={index === updates.length - 1}
-        key={`${update.type}-${index}`}
+        key={`${update.toolCallId}-${update.type}`}
         update={update}
       >
         <ResearchTask

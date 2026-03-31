@@ -132,6 +132,7 @@ export const codeArtifact = new Artifact<"code", Metadata>({
           currentPyodideInstance.setStdout({
             batched: (output: string) => {
               outputContent.push({
+                id: generateUUID(),
                 type: output.startsWith("data:image/png;base64")
                   ? "image"
                   : "text",
@@ -148,7 +149,13 @@ export const codeArtifact = new Artifact<"code", Metadata>({
                   ...metadata.outputs.filter((output) => output.id !== runId),
                   {
                     id: runId,
-                    contents: [{ type: "text", value: message }],
+                    contents: [
+                      {
+                        id: generateUUID(),
+                        type: "text",
+                        value: message,
+                      },
+                    ],
                     status: "loading_packages",
                   },
                 ],
@@ -191,7 +198,13 @@ export const codeArtifact = new Artifact<"code", Metadata>({
               ...metadata.outputs.filter((output) => output.id !== runId),
               {
                 id: runId,
-                contents: [{ type: "text", value: error.message }],
+                contents: [
+                  {
+                    id: generateUUID(),
+                    type: "text",
+                    value: error.message,
+                  },
+                ],
                 status: "failed",
               },
             ],
